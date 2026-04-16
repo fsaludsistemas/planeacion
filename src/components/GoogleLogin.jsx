@@ -31,9 +31,8 @@ const GoogleLogin = ({ setIsLogin, setUserInfo }) => {
           name: userName.charAt(0).toUpperCase() + userName.slice(1),
           permission: userPermission.permiso
         };
-        setUserInfo(userInfo);
-
         setIsLogin(true);
+        setUserInfo(userInfo);
         const expiracion = new Date();
         expiracion.setDate(expiracion.getDate() + 5);
         Cookies.set('token', JSON.stringify(data_decode), { expires: expiracion });
