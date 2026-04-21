@@ -1,5 +1,6 @@
 import React from "react";
 import { styled } from "@mui/material/styles";
+import { Button } from "@mui/material";
 import { Link } from "react-router-dom";
 import logo from "/src/assets/images/logounivalle.svg";
 
@@ -69,7 +70,17 @@ const Logo = styled("div")(({ theme }) => ({
   },
 }));
 
-const Header = ({ userInfo }) => {
+const ActionContainer = styled("div")(({ theme }) => ({
+  paddingRight: "16px",
+  display: "flex",
+  alignItems: "center",
+  [theme.breakpoints.down("sm")]: {
+    paddingRight: 0,
+    marginBottom: "12px",
+  },
+}));
+
+const Header = ({ userInfo, onLogout }) => {
   return (
     <HeaderContainer role="navegación" aria-label="Navegación Principal">
       <Logo>
@@ -80,9 +91,25 @@ const Header = ({ userInfo }) => {
       <TitleContainer>
         <Title>Planeación</Title>
         {userInfo && (
-          <Subtitle>{`${userInfo.name} - ${userInfo.permission}`}</Subtitle>
+          <Subtitle>{`${userInfo.name} - ${userInfo.rol}`}</Subtitle>
         )}
       </TitleContainer>
+      <ActionContainer>
+        <Button
+          variant="contained"
+          onClick={onLogout}
+          sx={{
+            backgroundColor: "#c62828",
+            color: "#ffffff",
+            fontWeight: 700,
+            '&:hover': {
+              backgroundColor: "#b71c1c",
+            },
+          }}
+        >
+          Salir
+        </Button>
+      </ActionContainer>
     </HeaderContainer>
   );
 };
