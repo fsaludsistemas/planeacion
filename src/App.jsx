@@ -106,7 +106,7 @@ const App = () => {
 
   const renderCurrentTab = () => {
     if (currentTab === 0) {
-      return <IndicatorsPage data={appData} />;
+      return <IndicatorsPage data={appData} userInfo={userInfo} />;
     }
 
     if (currentTab === 1) {

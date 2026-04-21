@@ -163,9 +163,26 @@ const buildOptions = (items, getValue, getLabel) => {
   );
 };
 
-const IndicatorsPage = ({ data }) => {
+const IndicatorsPage = ({ data, userInfo }) => {
   const [filters, setFilters] = useState(INITIAL_FILTERS);
   const [expandedRowKey, setExpandedRowKey] = useState(null);
+
+  const sessionUser = useMemo(() => {
+    if (userInfo) {
+      return userInfo;
+    }
+
+    try {
+      const storedUser = sessionStorage.getItem('loggedUser');
+      return storedUser ? JSON.parse(storedUser) : null;
+    } catch (error) {
+      return null;
+    }
+  }, [userInfo]);
+
+  const loggedUserDependencyId = String(sessionUser?.id_dependencia || '').trim();
+  const isSystemUser = loggedUserDependencyId === '0';
+  const hasDependencyRestriction = !!loggedUserDependencyId && !isSystemUser;
 
   const dependencias = toArray(data?.DEPENDENCIAS);
   const indicadores = useMemo(() => {
@@ -199,8 +216,18 @@ const IndicatorsPage = ({ data }) => {
     );
   }, [periodos]);
 
+  const visibleIndicators = useMemo(() => {
+    if (!hasDependencyRestriction) {
+      return indicadores;
+    }
+
+    return indicadores.filter(
+      (indicador) => String(indicador.id_dependencia || '').trim() === loggedUserDependencyId
+    );
+  }, [indicadores, hasDependencyRestriction, loggedUserDependencyId]);
+
   const indicatorRows = useMemo(() => {
-    return indicadores.map((indicador, index) => {
+    return visibleIndicators.map((indicador, index) => {
       const idIndicador = String(indicador.id);
       const dependencia = dependenciaById.get(String(indicador.id_dependencia));
 
@@ -307,7 +334,7 @@ const IndicatorsPage = ({ data }) => {
       };
     });
   }, [
-    indicadores,
+    visibleIndicators,
     dependenciaById,
     ejes,
     estrategias,
@@ -464,11 +491,25 @@ const IndicatorsPage = ({ data }) => {
     );
   }
 
+  if (hasDependencyRestriction && !indicatorRows.length) {
+    return (
+      <Typography sx={{ marginTop: '20px' }}>
+        No hay indicadores disponibles para tu dependencia.
+      </Typography>
+    );
+  }
+
   return (
     <Box className="indicators-page">
       <Typography variant="h5" sx={{ marginBottom: '14px', fontWeight: 700 }}>
         Indicadores
       </Typography>
+
+      {hasDependencyRestriction && (
+        <Typography variant="body2" sx={{ marginBottom: '12px', color: '#455a64', fontWeight: 600 }}>
+          Vista restringida a tu dependencia.
+        </Typography>
+      )}
 
       <Paper className="filters-panel" elevation={1}>
         <Box className="filters-header">
