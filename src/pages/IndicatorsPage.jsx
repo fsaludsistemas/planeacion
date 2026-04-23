@@ -773,8 +773,10 @@ const IndicatorsPage = ({ data, userInfo }) => {
                         <TableRow>
                           <TableCell sx={{ fontWeight: 'bold' }}>Concepto</TableCell>
                           <TableCell sx={{ fontWeight: 'bold' }}>Tipo</TableCell>
+                        {/** 
                           <TableCell sx={{ fontWeight: 'bold' }}>2024</TableCell>
                           <TableCell sx={{ fontWeight: 'bold' }}>2025</TableCell>
+                        */}
                           <TableCell sx={{ fontWeight: 'bold' }}>2026</TableCell>
                           <TableCell sx={{ fontWeight: 'bold' }}>Total Trienio</TableCell>
                         </TableRow>
@@ -783,16 +785,20 @@ const IndicatorsPage = ({ data, userInfo }) => {
                         <TableRow>
                           <TableCell sx={{ fontWeight: 'bold' }}>Meta</TableCell>
                           <TableCell>{toText(meta?.tipo)}</TableCell>
+                            {/** 
                           <TableCell>{toText(meta?.meta_2024)}</TableCell>
                           <TableCell>{toText(meta?.meta_2025)}</TableCell>
+                           */ }
                           <TableCell>{toText(meta?.meta_2026)}</TableCell>
                           <TableCell>{toText(totalMeta)}</TableCell>
                         </TableRow>
                         <TableRow>
                           <TableCell sx={{ fontWeight: 'bold' }}>Avance</TableCell>
                           <TableCell>{toText(meta?.tipo)}</TableCell>
+                            {/**
                           <TableCell>{toText(avance?.avance2024)}</TableCell>
                           <TableCell>{toText(avance?.avance2025)}</TableCell>
+                            */}
                           <TableCell>{toText(avance?.avance2026)}</TableCell>
                           <TableCell>{toText(totalAvance)}</TableCell>
                         </TableRow>
@@ -811,9 +817,11 @@ const IndicatorsPage = ({ data, userInfo }) => {
                       marginBottom: '16px',
                     }}
                   >
-                    <Box sx={{ width: '20%', fontWeight: 'bold' }}>Documentos de evidencia:</Box>
+                    <Box sx={{ width: '60%', fontWeight: 'bold' }}>Documentos de evidencia:</Box>
                     <Box sx={{ width: '10%' }} />
+                    {/** 
                     <Box sx={{ width: '16.66%', textAlign: 'center' }}>
+                      
                       <Typography variant="caption" sx={{ display: 'block', marginBottom: '4px' }}>
                         2024
                       </Typography>
@@ -825,7 +833,8 @@ const IndicatorsPage = ({ data, userInfo }) => {
                       </Typography>
                       <TextField className="input-value" label="URL documento evidencia 2025" />
                     </Box>
-                    <Box sx={{ width: '16.66%', textAlign: 'center' }}>
+                      */}
+                    <Box sx={{ width: '46.66%', textAlign: 'center' }}>
                       <Typography variant="caption" sx={{ display: 'block', marginBottom: '4px' }}>
                         2026
                       </Typography>
