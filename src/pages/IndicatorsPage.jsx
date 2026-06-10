@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState } from "react";
 import {
   Accordion,
   AccordionDetails,
@@ -20,622 +20,497 @@ import {
   TableHead,
   TableRow,
   Typography,
-  TextField,
-} from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import '../styles/indicators.css';
+} from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import AddIcon from "@mui/icons-material/Add";
+import CreateIndicator from "../components/CreateIndicator";
+import EditModal from "../components/EditModal";
+import ModalDetails from "../components/ModalDetails";
+import { createSheetRow, deleteSheetRow, updateSheetRow } from "../api/api";
+import "../styles/indicators.css";
+
+const SHEET_NAME = "INDICADORES_PRODUCTO";
 
 const toArray = (value) => (Array.isArray(value) ? value : []);
+const toText = (value) => String(value ?? "").trim() || "No disponible";
+const normalize = (value) =>
+  String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
 
-const INITIAL_FILTERS = {
-  ejeId: '',
-  estrategiaId: '',
-  programaId: '',
-  impactoId: '',
-  objetivoDecanatoId: '',
-  dependenciaId: '',
-  tipoDependencia: 'TODAS',
-  periodoId: '',
-  periodoActual: 'TODOS',
-};
-
-const toText = (value) => {
-  if (value === undefined || value === null) {
-    return 'No disponible';
+const getSheet = (data, ...keys) => {
+  for (const key of keys) {
+    const value = data?.[key];
+    if (Array.isArray(value)) return value;
   }
-
-  const normalized = String(value).trim();
-  return normalized === '' ? 'No disponible' : normalized;
+  return [];
 };
 
-const toFilterValue = (value) => {
-  const normalized = String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
-  return normalized;
-};
+const sortById = (items) =>
+  [...items].sort((a, b) => Number(a?.id ?? 0) - Number(b?.id ?? 0));
 
-const parseNumberishValue = (value) => {
-  const raw = String(value || '').trim();
-  if (!raw) {
-    return null;
-  }
-
-  const isPercent = raw.includes('%');
-  const normalized = raw.replace('%', '').replace(',', '.').trim();
-  const parsed = Number(normalized);
-
-  if (!Number.isFinite(parsed)) {
-    return null;
-  }
-
-  return { parsed, isPercent };
-};
-
-const getTrienioTotal = (values) => {
-  const validValues = values
-    .map((value) => parseNumberishValue(value))
-    .filter((value) => value !== null);
-
-  if (!validValues.length) {
-    return 'No disponible';
-  }
-
-  const total = validValues.reduce((acc, item) => acc + item.parsed, 0);
-  const hasPercent = validValues.some((item) => item.isPercent);
-  const rounded = Number.isInteger(total) ? String(total) : total.toFixed(2);
-
-  return hasPercent ? `${rounded}%` : rounded;
-};
-
-const getDependencyDisplay = (dependencia) => {
-  if (!dependencia) {
-    return 'No disponible';
-  }
-
-  const nombre = toText(dependencia.nombre);
-  return nombre;
-};
-
-const toBoolean = (value) => {
-  const normalized = String(value || '').trim().toLowerCase();
-  return normalized === 'true' || normalized === '1' || normalized === 'si' || normalized === 'sí';
-};
-
-const normalizeDependencyType = (value) => {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === 'oficina') {
-    return 'Oficina';
-  }
-
-  if (normalized === 'escuela') {
-    return 'Escuela';
-  }
-
-  return 'No definido';
-};
-
-const getObjectiveDisplay = (objetivo) => {
-  if (!objetivo) {
-    return 'No disponible';
-  }
-
-  const code = String(objetivo.id_obj_deca || '').trim();
-  const text = toText(objetivo.objetivo);
-
-  return code ? `${code}. ${text}` : text;
-};
-
-const getPeriodoIdFromIndicator = (indicador) => {
-  const raw =
-    indicador.id_periodo ||
-    indicador.id_peridodo ||
-    indicador.id_periododo ||
-    indicador.idPeridodo ||
-    '';
-
-  return String(raw).trim();
-};
-
-const getPeriodoLabel = (periodo) => {
-  const anioInicial = String(periodo?.anio_ini || '').trim();
-  const anioFinal = String(periodo?.anio_final || '').trim();
-
-  if (anioInicial && anioFinal) {
-    return `${anioInicial}-${anioFinal}`;
-  }
-
-  return anioInicial || anioFinal || 'No disponible';
-};
-
-const buildOptions = (items, getValue, getLabel) => {
-  const map = new Map();
-
-  items.forEach((item) => {
-    const value = String(getValue(item) || '').trim();
-    if (!value || map.has(value)) {
-      return;
-    }
-
-    map.set(value, getLabel(item));
-  });
-
-  return Array.from(map, ([value, label]) => ({ value, label })).sort((a, b) =>
-    String(a.label).localeCompare(String(b.label), 'es', { sensitivity: 'base' })
-  );
+const getTipoDependencia = (dependencia) => {
+  const value = normalize(dependencia?.tipo);
+  if (value === "escuela") return "Escuela";
+  if (value === "oficina") return "Oficina";
+  return "No definido";
 };
 
 const IndicatorsPage = ({ data, userInfo }) => {
-  const [filters, setFilters] = useState(INITIAL_FILTERS);
-  const [expandedRowKey, setExpandedRowKey] = useState(null);
+  const [filters, setFilters] = useState({
+    dependencia: "",
+    tipoDependencia: "TODAS",
+    desafio: "",
+    estrategiaConvergente: "",
+    estrategiaFacultad: "",
+    programaInstitucional: "",
+    indicadorResultado: "",
+  });
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editState, setEditState] = useState({ open: false, indicator: null });
+  const [detailsState, setDetailsState] = useState({
+    open: false,
+    indicator: null,
+  });
+  const [expandedId, setExpandedId] = useState(null);
+  const [actionError, setActionError] = useState("");
+  const [busyId, setBusyId] = useState("");
 
   const sessionUser = useMemo(() => {
-    if (userInfo) {
-      return userInfo;
-    }
-
+    if (userInfo) return userInfo;
     try {
-      const storedUser = sessionStorage.getItem('loggedUser');
-      return storedUser ? JSON.parse(storedUser) : null;
-    } catch (error) {
+      const stored = sessionStorage.getItem("loggedUser");
+      return stored ? JSON.parse(stored) : null;
+    } catch {
       return null;
     }
   }, [userInfo]);
 
-  const loggedUserDependencyId = String(sessionUser?.id_dependencia || '').trim();
-  const isSystemUser = loggedUserDependencyId === '0';
-  const hasDependencyRestriction = !!loggedUserDependencyId && !isSystemUser;
+  const indicators = useMemo(
+    () => sortById(getSheet(data, "INDICADORES_PRODUCTO")),
+    [data],
+  );
+  const dependencias = useMemo(
+    () => sortById(getSheet(data, "DEPENDENCIA", "DEPENDENCIAS")),
+    [data],
+  );
+  const desafios = useMemo(() => sortById(getSheet(data, "DESAFIOS")), [data]);
+  const estrategiasConvergentes = useMemo(
+    () =>
+      sortById(
+        getSheet(data, "ESTRATEGIA_CONVERGENTE", "ESTRATEGIA_CONVERGENTE"),
+      ),
+    [data],
+  );
 
-  const dependencias = toArray(data?.DEPENDENCIAS);
-  const indicadores = useMemo(() => {
-    return toArray(data?.INDICADORES).sort((a, b) => Number(a.id) - Number(b.id));
-  }, [data]);
-  const periodos = toArray(data?.PERIODO);
-  const ejes = toArray(data?.EJE);
-  const estrategias = toArray(data?.ESTRATEGIA);
-  const programas = toArray(data?.PROGRAMAS);
-  const proyectos = toArray(data?.PROYECTOS);
-  const impactos = toArray(data?.IMPACTOS);
-  const objDeca = toArray(data?.OBJ_DECA);
-  const objActor = toArray(data?.OBJ_ACTOR);
-  const actores = toArray(data?.ACTORES);
-  const metas = toArray(data?.METAS);
-  const avances = toArray(data?.AVANCES);
+  const periodos = useMemo(() => sortById(getSheet(data, "PERIODO")), [data]);
+  const estrategiasFacultad = useMemo(
+    () => sortById(getSheet(data, "ESTRATEGIA_FACULTAD")),
+    [data],
+  );
+  const programasInstitucionales = useMemo(
+    () => sortById(getSheet(data, "PROGRAMAS_INST")),
+    [data],
+  );
+  const indicadoresResultado = useMemo(
+    () => sortById(getSheet(data, "INDICADORES_RESULTADO")),
+    [data],
+  );
+  const metas = useMemo(() => sortById(getSheet(data, "METAS")), [data]);
+  const avances = useMemo(() => sortById(getSheet(data, "AVANCES")), [data]);
 
-  const dependenciaById = useMemo(() => {
-    return new Map(dependencias.map((item) => [String(item.id), item]));
-  }, [dependencias]);
+  const byId = (items) => new Map(items.map((item) => [String(item.id), item]));
+  const dependenciaById = useMemo(() => byId(dependencias), [dependencias]);
+  const desafioById = useMemo(() => byId(desafios), [desafios]);
+  const convergenteById = useMemo(
+    () => byId(estrategiasConvergentes),
+    [estrategiasConvergentes],
+  );
+  const facultadById = useMemo(
+    () => byId(estrategiasFacultad),
+    [estrategiasFacultad],
+  );
+  const programaById = useMemo(
+    () => byId(programasInstitucionales),
+    [programasInstitucionales],
+  );
+  const resultadoById = useMemo(
+    () => byId(indicadoresResultado),
+    [indicadoresResultado],
+  );
+  const periodoById = useMemo(() => byId(periodos), [periodos]);
+  const metaByIndicatorId = useMemo(
+    () =>
+      new Map(metas.map((item) => [String(item.id_indicador_producto), item])),
+    [metas],
+  );
+  const avanceByIndicatorId = useMemo(
+    () => new Map(avances.map((item) => [String(item.id_indicador), item])),
+    [avances],
+  );
 
-  const periodoById = useMemo(() => {
-    return new Map(periodos.map((item) => [String(item.id), item]));
-  }, [periodos]);
+  const userDependencyId = String(sessionUser?.id_dependencia || "").trim();
+  const isSystemUser =
+    userDependencyId === "0" || normalize(sessionUser?.permiso) === "sistemas";
 
-  const currentPeriodoIds = useMemo(() => {
-    return new Set(
-      periodos
-        .filter((item) => toBoolean(item.actual))
-        .map((item) => String(item.id))
-    );
-  }, [periodos]);
-
-  const visibleIndicators = useMemo(() => {
-    if (!hasDependencyRestriction) {
-      return indicadores;
-    }
-
-    return indicadores.filter(
-      (indicador) => String(indicador.id_dependencia || '').trim() === loggedUserDependencyId
-    );
-  }, [indicadores, hasDependencyRestriction, loggedUserDependencyId]);
-
-  const indicatorRows = useMemo(() => {
-    return visibleIndicators.map((indicador, index) => {
-      const idIndicador = String(indicador.id);
-      const dependencia = dependenciaById.get(String(indicador.id_dependencia));
-
-      const ejeByIndicator = ejes.find((item) => String(item.id_indicador) === idIndicador);
-
-      const programa =
-        programas.find((item) => String(item.id) === String(indicador.id_programa)) || null;
-
-      const estrategia =
-        (programa &&
-          estrategias.find((item) => String(item.id) === String(programa.id_estrategia))) ||
-        (ejeByIndicator &&
-          estrategias.find((item) => String(item.id_eje) === String(ejeByIndicator.id))) ||
-        estrategias.find((item) => String(item.id) === String(indicador.id_estrategia)) ||
-        null;
-
-      const eje =
-        ejeByIndicator ||
-        (estrategia && ejes.find((item) => String(item.id) === String(estrategia.id_eje))) ||
-        null;
-
-      const proyecto =
-        proyectos.find((item) => String(item.id) === String(indicador.id_proyecto)) ||
-        proyectos.find((item) => String(item.id_indicador) === idIndicador) ||
-        null;
-
-      const impacto =
-        impactos.find((item) => String(item.id) === String(indicador.id_impacto)) ||
-        impactos.find((item) => String(item.id_indicador) === idIndicador) ||
-        null;
-
-      const objetivoDecanato =
-        objDeca.find((item) => String(item.id_indicador) === idIndicador) ||
-        objDeca.find((item) => String(item.id_obj_deca) === String(indicador.id_obj_dec)) ||
-        objDeca.find((item) => String(item.id) === String(indicador.id_obj_dec)) ||
-        null;
-
-      const objetivoDependencia =
-        objActor.find((item) => String(item.id) === String(indicador.id_obj_ofi)) ||
-        objActor.find((item) => String(item.id_dependencia) === String(indicador.id_dependencia)) ||
-        null;
-
-      const actor = actores.find((item) => String(item.id_indicador) === idIndicador) || null;
-      const responsable = actor ? dependenciaById.get(String(actor.responsable0)) : null;
-      const responsableDirecto = actor
-        ? dependenciaById.get(String(actor.responsable_indirecto))
-        : null;
-
-      const meta = metas.find((item) => String(item.id_indicador) === idIndicador) || null;
-      const avance = avances.find((item) => String(item.id_indicador) === idIndicador) || null;
-
-      const totalMeta =
-        meta?.total_trieno ||
-        getTrienioTotal([meta?.meta_2024, meta?.meta_2025, meta?.meta_2026]);
-
-      const totalAvance = getTrienioTotal([
-        avance?.avance2024,
-        avance?.avance2025,
-        avance?.avance2026,
-      ]);
-
-      const periodoId = getPeriodoIdFromIndicator(indicador);
-      const periodo = periodoById.get(periodoId);
-      const esPeriodoActual = periodoId ? currentPeriodoIds.has(periodoId) : false;
-      const periodoLabel = getPeriodoLabel(periodo);
-      const objetivoDecanatoLabel = getObjectiveDisplay(objetivoDecanato);
-      const dependenciaLabel = getDependencyDisplay(dependencia);
-      const rowKey = `${idIndicador}-${periodoId || 'sin-periodo'}-${index}`;
-
-      return {
-        rowKey,
-        indicador,
-        idIndicador,
-        dependencia,
-        dependenciaId: String(indicador.id_dependencia || ''),
-        dependenciaFilterValue: toFilterValue(dependenciaLabel),
-        dependenciaLabel,
-        dependenciaTipo: normalizeDependencyType(dependencia?.tipo),
-        eje,
-        ejeFilterValue: toFilterValue(eje?.titulo),
-        estrategia,
-        estrategiaFilterValue: toFilterValue(estrategia?.titulo),
-        programa,
-        programaFilterValue: toFilterValue(programa?.titulo),
-        proyecto,
-        impacto,
-        impactoFilterValue: toFilterValue(impacto?.titulo),
-        objetivoDecanato,
-        objetivoDecanatoLabel,
-        objetivoDecanatoFilterValue: toFilterValue(objetivoDecanatoLabel),
-        objetivoDependencia,
-        actor,
-        responsable,
-        responsableDirecto,
-        meta,
-        avance,
-        totalMeta,
-        totalAvance,
-        periodo,
-        periodoId,
-        periodoLabel,
-        periodoRangeValue: toFilterValue(periodoLabel),
-        esPeriodoActual,
-      };
-    });
+  const baseRows = useMemo(() => {
+    return indicators.map((indicator) => ({
+      ...indicator,
+      dependencia: dependenciaById.get(String(indicator.id_dependencia)),
+      desafio: desafioById.get(String(indicator.id_desafio)),
+      estrategiaConvergente: convergenteById.get(
+        String(indicator.id_estrategia_convergente),
+      ),
+      estrategiaFacultad: facultadById.get(
+        String(indicator.id_estrategia_facultad),
+      ),
+      programaInstitucional: programaById.get(
+        String(indicator.id_programa_inst),
+      ),
+      indicadorResultado: resultadoById.get(
+        String(indicator.id_indicador_resultado),
+      ),
+      periodo: periodoById.get(String(indicator.id_periodo)),
+      meta: metaByIndicatorId.get(String(indicator.id)),
+      avance: avanceByIndicatorId.get(String(indicator.id)),
+    }));
   }, [
-    visibleIndicators,
+    indicators,
     dependenciaById,
-    ejes,
-    estrategias,
-    programas,
-    proyectos,
-    impactos,
-    objDeca,
-    objActor,
-    actores,
-    metas,
-    avances,
+    desafioById,
+    convergenteById,
+    facultadById,
+    programaById,
+    resultadoById,
     periodoById,
-    currentPeriodoIds,
+    metaByIndicatorId,
+    avanceByIndicatorId,
   ]);
 
-  const ejeOptions = useMemo(() => {
-    return buildOptions(
-      indicatorRows,
-      (item) => item.ejeFilterValue,
-      (item) => toText(item.eje?.titulo)
+  const visibleRows = useMemo(() => {
+    if (isSystemUser || !userDependencyId) return baseRows;
+    return baseRows.filter(
+      (row) => String(row.id_dependencia || "") === userDependencyId,
     );
-  }, [indicatorRows]);
+  }, [baseRows, isSystemUser, userDependencyId]);
 
-  const estrategiaOptions = useMemo(() => {
-    return buildOptions(
-      indicatorRows,
-      (item) => item.estrategiaFilterValue,
-      (item) => toText(item.estrategia?.titulo)
-    );
-  }, [indicatorRows]);
-
-  const programaOptions = useMemo(() => {
-    return buildOptions(
-      indicatorRows,
-      (item) => item.programaFilterValue,
-      (item) => toText(item.programa?.titulo)
-    );
-  }, [indicatorRows]);
-
-  const impactoOptions = useMemo(() => {
-    return buildOptions(
-      indicatorRows,
-      (item) => item.impactoFilterValue,
-      (item) => toText(item.impacto?.titulo)
-    );
-  }, [indicatorRows]);
-
-  const objetivoDecanatoOptions = useMemo(() => {
-    return buildOptions(
-      indicatorRows,
-      (item) => item.objetivoDecanatoFilterValue,
-      (item) => item.objetivoDecanatoLabel
-    );
-  }, [indicatorRows]);
-
-  const dependenciaOptions = useMemo(() => {
-    return buildOptions(
-      indicatorRows,
-      (item) => item.dependenciaFilterValue,
-      (item) => item.dependenciaLabel
-    );
-  }, [indicatorRows]);
-
-  const periodoOptions = useMemo(() => {
-    return buildOptions(
-      indicatorRows,
-      (item) => item.periodoRangeValue,
-      (item) => item.periodoLabel
-    );
-  }, [indicatorRows]);
+  const filterOptions = useMemo(() => {
+    const selectedDesafioIds = filters.desafio
+      ? [filters.desafio]
+      : desafios.map((item) => String(item.id));
+    const selectedConvergenteIds = filters.estrategiaConvergente
+      ? [filters.estrategiaConvergente]
+      : estrategiasConvergentes
+          .filter((item) =>
+            selectedDesafioIds.includes(String(item.id_desafio || "")),
+          )
+          .map((item) => String(item.id));
+    const selectedFacultadIds = filters.estrategiaFacultad
+      ? [filters.estrategiaFacultad]
+      : estrategiasFacultad
+          .filter((item) =>
+            selectedConvergenteIds.includes(
+              String(
+                item.id_convergente || item.id_estrategia_convergente || "",
+              ),
+            ),
+          )
+          .map((item) => String(item.id));
+    const selectedProgramaIds = filters.programaInstitucional
+      ? [filters.programaInstitucional]
+      : programasInstitucionales
+          .filter((item) =>
+            selectedFacultadIds.includes(
+              String(item.id_estrategia_facultad || ""),
+            ),
+          )
+          .map((item) => String(item.id));
+    return {
+      dependencias: dependencias,
+      desafios: sortById(desafios),
+      estrategiasConvergentes: sortById(
+        estrategiasConvergentes.filter((item) =>
+          selectedDesafioIds.includes(String(item.id_desafio || "")),
+        ),
+      ),
+      estrategiasFacultad: sortById(
+        estrategiasFacultad.filter((item) =>
+          selectedConvergenteIds.includes(
+            String(item.id_convergente || item.id_estrategia_convergente || ""),
+          ),
+        ),
+      ),
+      programasInstitucionales: sortById(
+        programasInstitucionales.filter((item) =>
+          selectedFacultadIds.includes(
+            String(item.id_estrategia_facultad || ""),
+          ),
+        ),
+      ),
+      indicadoresResultado: sortById(
+        indicadoresResultado.filter((item) =>
+          selectedProgramaIds.includes(String(item.id_programa_inst || "")),
+        ),
+      ),
+    };
+  }, [
+    dependencias,
+    desafios,
+    estrategiasConvergentes,
+    estrategiasFacultad,
+    programasInstitucionales,
+    indicadoresResultado,
+    filters.desafio,
+    filters.estrategiaConvergente,
+    filters.estrategiaFacultad,
+    filters.programaInstitucional,
+    visibleRows,
+  ]);
 
   const filteredRows = useMemo(() => {
-    return indicatorRows.filter((item) => {
-      if (filters.ejeId && item.ejeFilterValue !== filters.ejeId) {
-        return false;
-      }
-
-      if (filters.estrategiaId && item.estrategiaFilterValue !== filters.estrategiaId) {
-        return false;
-      }
-
-      if (filters.programaId && item.programaFilterValue !== filters.programaId) {
-        return false;
-      }
-
-      if (filters.impactoId && item.impactoFilterValue !== filters.impactoId) {
-        return false;
-      }
-
+    return visibleRows.filter((row) => {
       if (
-        filters.objetivoDecanatoId &&
-        item.objetivoDecanatoFilterValue !== filters.objetivoDecanatoId
+        filters.dependencia &&
+        String(row.id_dependencia) !== filters.dependencia
       ) {
         return false;
       }
-
-      if (filters.dependenciaId && item.dependenciaFilterValue !== filters.dependenciaId) {
-        return false;
-      }
-
       if (
-        filters.tipoDependencia !== 'TODAS' &&
-        item.dependenciaTipo !== filters.tipoDependencia
+        filters.tipoDependencia !== "TODAS" &&
+        getTipoDependencia(row.dependencia) !== filters.tipoDependencia
       ) {
         return false;
       }
-
-      if (filters.periodoId && item.periodoRangeValue !== filters.periodoId) {
+      if (filters.desafio && String(row.id_desafio) !== filters.desafio) {
         return false;
       }
-
-      if (filters.periodoActual === 'SI' && !item.esPeriodoActual) {
+      if (
+        filters.estrategiaConvergente &&
+        String(row.id_estrategia_convergente) !== filters.estrategiaConvergente
+      ) {
         return false;
       }
-
-      if (filters.periodoActual === 'NO' && item.esPeriodoActual) {
+      if (
+        filters.estrategiaFacultad &&
+        String(row.id_estrategia_facultad) !== filters.estrategiaFacultad
+      ) {
         return false;
       }
-
+      if (
+        filters.programaInstitucional &&
+        String(row.id_programa_inst) !== filters.programaInstitucional
+      ) {
+        return false;
+      }
+      if (
+        filters.indicadorResultado &&
+        String(row.id_indicador_resultado) !== filters.indicadorResultado
+      ) {
+        return false;
+      }
       return true;
     });
-  }, [indicatorRows, filters]);
+  }, [visibleRows, filters]);
+
+  const resetBelow = (field, next) => {
+    const updated = { ...next };
+    if (field === "desafio") {
+      updated.estrategiaConvergente = "";
+      updated.estrategiaFacultad = "";
+      updated.programaInstitucional = "";
+      updated.indicadorResultado = "";
+    }
+    if (field === "estrategiaConvergente") {
+      updated.estrategiaFacultad = "";
+      updated.programaInstitucional = "";
+      updated.indicadorResultado = "";
+    }
+    if (field === "estrategiaFacultad") {
+      updated.programaInstitucional = "";
+      updated.indicadorResultado = "";
+    }
+    if (field === "programaInstitucional") {
+      updated.indicadorResultado = "";
+    }
+    return updated;
+  };
 
   const handleFilterChange = (field) => (event) => {
-    setFilters((prev) => ({
-      ...prev,
-      [field]: event.target.value,
-    }));
-    setExpandedRowKey(null);
+    const value = event.target.value;
+    setFilters((prev) => resetBelow(field, { ...prev, [field]: value }));
+    setExpandedId(null);
   };
 
-  const clearFilters = () => {
-    setFilters(INITIAL_FILTERS);
-    setExpandedRowKey(null);
+  const updateIndicator = async (id, payload) => {
+    setBusyId(String(id));
+    setActionError("");
+    try {
+      await updateSheetRow(SHEET_NAME, id, payload);
+      window.location.reload();
+    } catch (error) {
+      setActionError(
+        error?.response?.data?.message || "No se pudo actualizar el indicador.",
+      );
+    } finally {
+      setBusyId("");
+    }
   };
 
-  const handleAccordionChange = (rowKey) => (event, isExpanded) => {
-    setExpandedRowKey(isExpanded ? rowKey : null);
+  const createIndicator = async (payload) => {
+    setBusyId("create");
+    setActionError("");
+    try {
+      await createSheetRow(SHEET_NAME, payload);
+      setCreateOpen(false);
+      window.location.reload();
+    } catch (error) {
+      setActionError(
+        error?.response?.data?.message || "No se pudo crear el indicador.",
+      );
+      console.error("Error creating indicator:", error);
+      console.log("Payload:", payload);
+      console.log("API URL:", import.meta.env.VITE_API_BASE);
+    } finally {
+      setBusyId("");
+    }
+  };
+
+  const removeIndicator = async (indicator) => {
+    if (!window.confirm(`Eliminar el indicador "${toText(indicator.nombre)}"?`))
+      return;
+    setBusyId(String(indicator.id));
+    setActionError("");
+    try {
+      await deleteSheetRow(SHEET_NAME, indicator.id);
+      setDetailsState({ open: false, indicator: null });
+      window.location.reload();
+    } catch (error) {
+      setActionError(
+        error?.response?.data?.message || "No se pudo eliminar el indicador.",
+      );
+    } finally {
+      setBusyId("");
+    }
   };
 
   if (!data) {
-    return (
-      <Typography sx={{ marginTop: '20px' }}>
-        Cargando información de indicadores...
-      </Typography>
-    );
-  }
-
-  if (!indicadores.length) {
-    return (
-      <Typography sx={{ marginTop: '20px' }}>
-        No hay indicadores disponibles.
-      </Typography>
-    );
-  }
-
-  if (hasDependencyRestriction && !indicatorRows.length) {
-    return (
-      <Typography sx={{ marginTop: '20px' }}>
-        No hay indicadores disponibles para tu dependencia.
-      </Typography>
-    );
+    return <Typography sx={{ mt: 2 }}>Cargando informacion...</Typography>;
   }
 
   return (
     <Box className="indicators-page">
-      <Typography variant="h5" sx={{ marginBottom: '14px', fontWeight: 700 }}>
-        Indicadores
-      </Typography>
-
-      {hasDependencyRestriction && (
-        <Typography variant="body2" sx={{ marginBottom: '12px', color: '#455a64', fontWeight: 600 }}>
-          Vista restringida a tu dependencia.
-        </Typography>
-      )}
-
       <Paper className="filters-panel" elevation={1}>
         <Box className="filters-header">
-          <Typography variant="h6" sx={{ fontWeight: 700 }}>
-            Filtros
-          </Typography>
-          <Button variant="outlined" size="small" onClick={clearFilters}>
-            Limpiar filtros
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 800 }}>
+              Indicadores producto
+            </Typography>
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
+              {filteredRows.length} de {visibleRows.length} indicadores visibles
+            </Typography>
+          </Box>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setCreateOpen(true)}
+          >
+            Crear indicador
           </Button>
         </Box>
 
         <Box className="filters-grid">
           <FormControl size="small" fullWidth>
-            <InputLabel id="filter-eje-label">Eje</InputLabel>
+            <InputLabel>Dependencia</InputLabel>
             <Select
-              labelId="filter-eje-label"
-              value={filters.ejeId}
-              label="Eje"
-              onChange={handleFilterChange('ejeId')}
-            >
-              <MenuItem value="">Todos</MenuItem>
-              {ejeOptions.map((option) => (
-                <MenuItem key={option.value} value={option.value}>
-                  {option.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
-          <FormControl size="small" fullWidth>
-            <InputLabel id="filter-estrategia-label">Estrategia</InputLabel>
-            <Select
-              labelId="filter-estrategia-label"
-              value={filters.estrategiaId}
-              label="Estrategia"
-              onChange={handleFilterChange('estrategiaId')}
-            >
-              <MenuItem value="">Todas</MenuItem>
-              {estrategiaOptions.map((option) => (
-                <MenuItem key={option.value} value={option.value}>
-                  {option.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
-          <FormControl size="small" fullWidth>
-            <InputLabel id="filter-programa-label">Programa</InputLabel>
-            <Select
-              labelId="filter-programa-label"
-              value={filters.programaId}
-              label="Programa"
-              onChange={handleFilterChange('programaId')}
-            >
-              <MenuItem value="">Todos</MenuItem>
-              {programaOptions.map((option) => (
-                <MenuItem key={option.value} value={option.value}>
-                  {option.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
-          <FormControl size="small" fullWidth>
-            <InputLabel id="filter-impacto-label">Impacto</InputLabel>
-            <Select
-              labelId="filter-impacto-label"
-              value={filters.impactoId}
-              label="Impacto"
-              onChange={handleFilterChange('impactoId')}
-            >
-              <MenuItem value="">Todos</MenuItem>
-              {impactoOptions.map((option) => (
-                <MenuItem key={option.value} value={option.value}>
-                  {option.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
-          <FormControl size="small" fullWidth>
-            <InputLabel id="filter-objetivo-deca-label">Objetivo Decanato</InputLabel>
-            <Select
-              labelId="filter-objetivo-deca-label"
-              value={filters.objetivoDecanatoId}
-              label="Objetivo Decanato"
-              onChange={handleFilterChange('objetivoDecanatoId')}
-            >
-              <MenuItem value="">Todos</MenuItem>
-              {objetivoDecanatoOptions.map((option) => (
-                <MenuItem key={option.value} value={option.value}>
-                  {option.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
-          <FormControl size="small" fullWidth>
-            <InputLabel id="filter-dependencia-label">Dependencia</InputLabel>
-            <Select
-              labelId="filter-dependencia-label"
-              value={filters.dependenciaId}
+              value={filters.dependencia}
               label="Dependencia"
-              onChange={handleFilterChange('dependenciaId')}
+              onChange={handleFilterChange("dependencia")}
             >
               <MenuItem value="">Todas</MenuItem>
-              {dependenciaOptions.map((option) => (
-                <MenuItem key={option.value} value={option.value}>
-                  {option.label}
+              {filterOptions.dependencias.map((item) => (
+                <MenuItem key={item.id} value={String(item.id)}>
+                  {toText(item.nombre)}
                 </MenuItem>
               ))}
             </Select>
           </FormControl>
 
           <FormControl size="small" fullWidth>
-            <InputLabel id="filter-periodo-label">Periodo</InputLabel>
+            <InputLabel>Desafio</InputLabel>
             <Select
-              labelId="filter-periodo-label"
-              value={filters.periodoId}
-              label="Periodo"
-              onChange={handleFilterChange('periodoId')}
+              value={filters.desafio}
+              label="Desafio"
+              onChange={handleFilterChange("desafio")}
             >
               <MenuItem value="">Todos</MenuItem>
-              {periodoOptions.map((option) => (
-                <MenuItem key={option.value} value={option.value}>
-                  {option.label}
+              {filterOptions.desafios.map((item) => (
+                <MenuItem key={item.id} value={String(item.id)}>
+                  {toText(item.titulo)}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <FormControl size="small" fullWidth>
+            <InputLabel>Estrategia convergente</InputLabel>
+            <Select
+              value={filters.estrategiaConvergente}
+              label="Estrategia convergente"
+              onChange={handleFilterChange("estrategiaConvergente")}
+            >
+              <MenuItem value="">Todas</MenuItem>
+              {filterOptions.estrategiasConvergentes.map((item) => (
+                <MenuItem key={item.id} value={String(item.id)}>
+                  {toText(item.titulo)}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <FormControl size="small" fullWidth>
+            <InputLabel>Estrategia facultad</InputLabel>
+            <Select
+              value={filters.estrategiaFacultad}
+              label="Estrategia facultad"
+              onChange={handleFilterChange("estrategiaFacultad")}
+            >
+              <MenuItem value="">Todas</MenuItem>
+              {filterOptions.estrategiasFacultad.map((item) => (
+                <MenuItem key={item.id} value={String(item.id)}>
+                  {toText(item.titulo)}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <FormControl size="small" fullWidth>
+            <InputLabel>Programa institucional</InputLabel>
+            <Select
+              value={filters.programaInstitucional}
+              label="Programa institucional"
+              onChange={handleFilterChange("programaInstitucional")}
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {filterOptions.programasInstitucionales.map((item) => (
+                <MenuItem key={item.id} value={String(item.id)}>
+                  {toText(item.titulo)}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <FormControl size="small" fullWidth>
+            <InputLabel>Indicador resultado</InputLabel>
+            <Select
+              value={filters.indicadorResultado}
+              label="Indicador resultado"
+              onChange={handleFilterChange("indicadorResultado")}
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {filterOptions.indicadoresResultado.map((item) => (
+                <MenuItem key={item.id} value={String(item.id)}>
+                  {toText(item.nombre)}
                 </MenuItem>
               ))}
             </Select>
@@ -644,35 +519,32 @@ const IndicatorsPage = ({ data, userInfo }) => {
 
         <Box className="filters-secondary-row">
           <FormControl className="filter-radio-group-block">
-            <Typography className="radio-group-title">Tipo de dependencia</Typography>
+            <Typography className="radio-group-title">
+              Tipo de dependencia
+            </Typography>
             <RadioGroup
               row
               value={filters.tipoDependencia}
-              onChange={handleFilterChange('tipoDependencia')}
+              onChange={handleFilterChange("tipoDependencia")}
             >
-              <FormControlLabel value="TODAS" control={<Radio size="small" />} label="Todas" />
-              <FormControlLabel value="Oficina" control={<Radio size="small" />} label="Oficina" />
-              <FormControlLabel value="Escuela" control={<Radio size="small" />} label="Escuela" />
-            </RadioGroup>
-          </FormControl>
-
-          <FormControl className="filter-radio-group-block">
-            <Typography className="radio-group-title">Hace parte del periodo actual</Typography>
-            <RadioGroup
-              row
-              value={filters.periodoActual}
-              onChange={handleFilterChange('periodoActual')}
-            >
-              <FormControlLabel value="TODOS" control={<Radio size="small" />} label="Todos" />
-              <FormControlLabel value="SI" control={<Radio size="small" />} label="Sí" />
-              <FormControlLabel value="NO" control={<Radio size="small" />} label="No" />
+              <FormControlLabel
+                value="TODAS"
+                control={<Radio size="small" />}
+                label="Todas"
+              />
+              <FormControlLabel
+                value="Oficina"
+                control={<Radio size="small" />}
+                label="Oficina"
+              />
+              <FormControlLabel
+                value="Escuela"
+                control={<Radio size="small" />}
+                label="Escuela"
+              />
             </RadioGroup>
           </FormControl>
         </Box>
-
-        <Typography variant="body2" className="filters-result-count">
-          Mostrando {filteredRows.length} de {indicatorRows.length} indicadores
-        </Typography>
       </Paper>
 
       <Paper className="indicator-list-header" elevation={1}>
@@ -682,180 +554,149 @@ const IndicatorsPage = ({ data, userInfo }) => {
         <Typography className="summary-title" sx={{ fontWeight: 700 }}>
           Nombre
         </Typography>
-        <Typography className="summary-title indicator-summary-dependency" sx={{ fontWeight: 700 }}>
+        <Typography
+          className="summary-title indicator-summary-dependency"
+          sx={{ fontWeight: 700 }}
+        >
           Dependencia
         </Typography>
       </Paper>
 
-      {filteredRows.map((row) => {
-        const {
-          rowKey,
-          idIndicador,
-          indicador,
-          dependencia,
-          eje,
-          estrategia,
-          programa,
-          proyecto,
-          impacto,
-          objetivoDecanato,
-          objetivoDependencia,
-          actor,
-          responsable,
-          responsableDirecto,
-          meta,
-          avance,
-          totalMeta,
-          totalAvance,
-        } = row;
-
-        const isExpanded = expandedRowKey === rowKey;
-
-        const detailBlocks = isExpanded
-          ? [
-              { label: 'Eje', value: eje?.titulo },
-              { label: 'Estrategia', value: estrategia?.titulo },
-              { label: 'Programa', value: programa?.titulo },
-              { label: 'Proyecto', value: proyecto?.titulo },
-              { label: 'Impacto', value: impacto?.titulo },
-              { label: 'Objetivo Decanato', value: getObjectiveDisplay(objetivoDecanato) },
-              { label: 'Objetivo Oficina', value: objetivoDependencia?.objetivo_actor },
-              {
-                label: 'Responsable',
-                value: responsable ? getDependencyDisplay(responsable) : actor?.responsable0,
-              },
-              {
-                label: 'Responsable Directo',
-                value: responsableDirecto
-                  ? getDependencyDisplay(responsableDirecto)
-                  : actor?.responsable_indirecto,
-              },
-              { label: 'Coequipero', value: actor?.coequipero },
-              { label: 'Producto', value: indicador.producto },
-            ]
-          : [];
-
+      {filteredRows.map((indicator) => {
+        const isExpanded = expandedId === indicator.id;
         return (
           <Accordion
-            key={rowKey}
+            key={indicator.id}
             className="indicator-accordion"
             expanded={isExpanded}
-            onChange={handleAccordionChange(rowKey)}
-            TransitionProps={{ unmountOnExit: true, timeout: 180 }}
+            onChange={(_, expanded) =>
+              setExpandedId(expanded ? indicator.id : null)
+            }
           >
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
               <Box className="indicator-summary-grid">
-                <Typography sx={{ fontWeight: 'bold' }}>{toText(indicador.id)}</Typography>
-                <Typography sx={{ fontWeight: 'bold' }}>{toText(indicador.nombre)}</Typography>
-                <Typography className="indicator-summary-dependency" sx={{ fontWeight: 'bold' }}>
-                  {getDependencyDisplay(dependencia)}
+                <Typography sx={{ fontWeight: 700 }}>
+                  {toText(indicator.id)}
+                </Typography>
+                <Typography sx={{ fontWeight: 700 }}>
+                  {toText(indicator.nombre)}
+                </Typography>
+                <Typography
+                  sx={{ fontWeight: 700 }}
+                  className="indicator-summary-dependency"
+                >
+                  {toText(indicator.dependencia?.nombre)}
                 </Typography>
               </Box>
             </AccordionSummary>
-
             <AccordionDetails>
-              {isExpanded && (
-                <>
-                  <Box className="indicator-detail-grid">
-                    {detailBlocks.map((item) => (
-                      <Paper key={`${idIndicador}-${item.label}`} className="detail-item" elevation={0}>
-                        <Typography className="detail-label" sx={{ fontWeight: 'bold' }}>
-                          {item.label}
-                        </Typography>
-                        <Typography className="detail-value">{toText(item.value)}</Typography>
-                      </Paper>
-                    ))}
-                  </Box>
-
-                  <TableContainer component={Paper} sx={{ marginTop: '18px' }}>
-                    <Table size="small" sx={{ border: '1px solid #ddd' }}>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell sx={{ fontWeight: 'bold' }}>Concepto</TableCell>
-                          <TableCell sx={{ fontWeight: 'bold' }}>Tipo</TableCell>
-                        {/** 
-                          <TableCell sx={{ fontWeight: 'bold' }}>2024</TableCell>
-                          <TableCell sx={{ fontWeight: 'bold' }}>2025</TableCell>
-                        */}
-                          <TableCell sx={{ fontWeight: 'bold' }}>2026</TableCell>
-                          <TableCell sx={{ fontWeight: 'bold' }}>Total Trienio</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        <TableRow>
-                          <TableCell sx={{ fontWeight: 'bold' }}>Meta</TableCell>
-                          <TableCell>{toText(meta?.tipo)}</TableCell>
-                            {/** 
-                          <TableCell>{toText(meta?.meta_2024)}</TableCell>
-                          <TableCell>{toText(meta?.meta_2025)}</TableCell>
-                           */ }
-                          <TableCell>{toText(meta?.meta_2026)}</TableCell>
-                          <TableCell>{toText(totalMeta)}</TableCell>
-                        </TableRow>
-                        <TableRow>
-                          <TableCell sx={{ fontWeight: 'bold' }}>Avance</TableCell>
-                          <TableCell>{toText(meta?.tipo)}</TableCell>
-                            {/**
-                          <TableCell>{toText(avance?.avance2024)}</TableCell>
-                          <TableCell>{toText(avance?.avance2025)}</TableCell>
-                            */}
-                          <TableCell>{toText(avance?.avance2026)}</TableCell>
-                          <TableCell>{toText(totalAvance)}</TableCell>
-                        </TableRow>
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      flexDirection: 'row',
-                      justifyContent: 'flex-end',
-                      alignItems: 'center',
-                      gap: 2,
-                      marginTop: '8px',
-                      marginBottom: '16px',
-                    }}
-                  >
-                    <Box sx={{ width: '60%', fontWeight: 'bold' }}>Documentos de evidencia:</Box>
-                    <Box sx={{ width: '10%' }} />
-                    {/** 
-                    <Box sx={{ width: '16.66%', textAlign: 'center' }}>
-                      
-                      <Typography variant="caption" sx={{ display: 'block', marginBottom: '4px' }}>
-                        2024
-                      </Typography>
-                      <TextField className="input-value" label="URL documento evidencia 2024" />
-                    </Box>
-                    <Box sx={{ width: '16.66%', textAlign: 'center' }}>
-                      <Typography variant="caption" sx={{ display: 'block', marginBottom: '4px' }}>
-                        2025
-                      </Typography>
-                      <TextField className="input-value" label="URL documento evidencia 2025" />
-                    </Box>
-                      */}
-                    <Box sx={{ width: '46.66%', textAlign: 'center' }}>
-                      <Typography variant="caption" sx={{ display: 'block', marginBottom: '4px' }}>
-                        2026
-                      </Typography>
-                      <TextField className="input-value" label="URL documento evidencia 2026" />
-                    </Box>
-                    <Box sx={{ width: '16.66%' }} />
-                  </Box>
-
-                  <Box className="notes-box">
-                    <Typography className="detail-label">Observaciones</Typography>
-                    <Typography className="detail-value">{toText(indicador.observaciones)}</Typography>
-
-                    <Typography className="detail-label" sx={{ marginTop: '10px' }}>
-                      Necesidad Específica
-                    </Typography>
-                    <Typography className="detail-value">
-                      {toText(indicador['necesidad_específica'] || indicador.necesidad_especifica)}
-                    </Typography>
-                  </Box>
-                </>
-              )}
+              <Box className="indicator-detail-grid">
+                <Paper className="detail-item" elevation={0}>
+                  <Typography className="detail-label">Desafio</Typography>
+                  <Typography className="detail-value">
+                    {toText(indicator.desafio?.titulo)}
+                  </Typography>
+                </Paper>
+                <Paper className="detail-item" elevation={0}>
+                  <Typography className="detail-label">
+                    Estrategia convergente
+                  </Typography>
+                  <Typography className="detail-value">
+                    {toText(indicator.estrategiaConvergente?.titulo)}
+                  </Typography>
+                </Paper>
+                <Paper className="detail-item" elevation={0}>
+                  <Typography className="detail-label">
+                    Estrategia facultad
+                  </Typography>
+                  <Typography className="detail-value">
+                    {toText(indicator.estrategiaFacultad?.titulo)}
+                  </Typography>
+                </Paper>
+                <Paper className="detail-item" elevation={0}>
+                  <Typography className="detail-label">
+                    Programa institucional
+                  </Typography>
+                  <Typography className="detail-value">
+                    {toText(indicator.programaInstitucional?.titulo)}
+                  </Typography>
+                </Paper>
+              </Box>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: 1,
+                  mt: 2,
+                  flexWrap: "wrap",
+                }}
+              >
+                <Button
+                  variant="outlined"
+                  onClick={() => setDetailsState({ open: true, indicator })}
+                >
+                  Ver detalles
+                </Button>
+                <Button
+                  variant="contained"
+                  onClick={() => setEditState({ open: true, indicator })}
+                >
+                  Editar
+                </Button>
+                <Button
+                  color="error"
+                  variant="outlined"
+                  onClick={() => removeIndicator(indicator)}
+                >
+                  Eliminar
+                </Button>
+              </Box>
+              <TableContainer
+                component={Paper}
+                sx={{ mt: 2 }}
+                variant="outlined"
+              >
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 700 }}>Concepto</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Tipo</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>2026</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>
+                        Total trienio
+                      </TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 700 }}>Meta</TableCell>
+                      <TableCell>{toText(indicator.meta?.tipo)}</TableCell>
+                      <TableCell>{toText(indicator.meta?.meta_2026)}</TableCell>
+                      <TableCell>
+                        {toText(indicator.meta?.total_trienio)}
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 700 }}>Avance</TableCell>
+                      <TableCell>Porcentaje</TableCell>
+                      <TableCell>
+                        {toText(indicator.avance?.avance_2026)}
+                      </TableCell>
+                      <TableCell>
+                        {toText(indicator.avance?.total_trienio || "-")}
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              <Box sx={{ mt: 2 }}>
+                <Typography className="detail-label">
+                  URL documento evidencia
+                </Typography>
+                <Typography className="detail-value">
+                  {toText(indicator.meta?.url || indicator.avance?.url || "")}
+                </Typography>
+              </Box>
             </AccordionDetails>
           </Accordion>
         );
@@ -868,6 +709,54 @@ const IndicatorsPage = ({ data, userInfo }) => {
           </Typography>
         </Paper>
       )}
+
+      {actionError && (
+        <Paper sx={{ p: 2, mt: 2 }}>
+          <Typography color="error">{actionError}</Typography>
+        </Paper>
+      )}
+
+      <CreateIndicator
+        open={createOpen}
+        loading={busyId === "create"}
+        dependencias={dependencias}
+        desafios={desafios}
+        estrategiasConvergentes={estrategiasConvergentes}
+        estrategiasFacultad={estrategiasFacultad}
+        programasInstitucionales={programasInstitucionales}
+        indicadoresResultado={indicadoresResultado}
+        periodos={periodos}
+        onClose={() => setCreateOpen(false)}
+        onSubmit={createIndicator}
+      />
+
+      <EditModal
+        open={editState.open}
+        loading={busyId === String(editState.indicator?.id)}
+        indicator={editState.indicator}
+        dependencias={dependencias}
+        desafios={desafios}
+        estrategiasConvergentes={estrategiasConvergentes}
+        estrategiasFacultad={estrategiasFacultad}
+        programasInstitucionales={programasInstitucionales}
+        indicadoresResultado={indicadoresResultado}
+        periodos={[]}
+        onClose={() => setEditState({ open: false, indicator: null })}
+        onSubmit={(payload) => updateIndicator(editState.indicator.id, payload)}
+      />
+
+      <ModalDetails
+        open={detailsState.open}
+        indicator={detailsState.indicator}
+        dependencias={dependencias}
+        desafios={desafios}
+        estrategiasConvergentes={estrategiasConvergentes}
+        estrategiasFacultad={estrategiasFacultad}
+        programasInstitucionales={programasInstitucionales}
+        indicadoresResultado={indicadoresResultado}
+        periodos={periodos}
+        onClose={() => setDetailsState({ open: false, indicator: null })}
+      />
     </Box>
   );
 };

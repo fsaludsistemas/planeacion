@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from "react";
-import { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Button,
   Dialog,
@@ -25,10 +24,9 @@ const emptyForm = {
 
 const toText = (value) => String(value ?? "").trim() || "No disponible";
 
-const EditModal = ({
+const CreateIndicator = ({
   open,
   loading,
-  indicator,
   dependencias,
   desafios,
   estrategiasConvergentes,
@@ -42,51 +40,12 @@ const EditModal = ({
   const [form, setForm] = useState(emptyForm);
 
   useEffect(() => {
-    if (open && indicator) {
-      setForm({
-        nombre: indicator.nombre || "",
-        objetivo_escuela: indicator.objetivo_escuela || "",
-        id_dependencia: String(indicator.id_dependencia || ""),
-        id_desafio: String(indicator.id_desafio || ""),
-        id_estrategia_convergente: String(
-          indicator.id_estrategia_convergente || "",
-        ),
-        id_estrategia_facultad: String(indicator.id_estrategia_facultad || ""),
-        id_programa_inst: String(indicator.id_programa_inst || ""),
-        id_indicador_resultado: String(indicator.id_indicador_resultado || ""),
-        id_periodo: String(indicator.id_periodo || ""),
-      });
-    }
-  }, [open, indicator]);
+    if (open) setForm(emptyForm);
+  }, [open]);
 
-  const handleChange = (field) => (event) => {
-    setForm((prev) => {
-      const nextValue = event.target.value;
-      const next = { ...prev, [field]: nextValue };
-      if (field === "id_desafio") {
-        next.id_estrategia_convergente = "";
-        next.id_estrategia_facultad = "";
-        next.id_programa_inst = "";
-        next.id_indicador_resultado = "";
-      }
-      if (field === "id_estrategia_convergente") {
-        next.id_estrategia_facultad = "";
-        next.id_programa_inst = "";
-        next.id_indicador_resultado = "";
-      }
-      if (field === "id_estrategia_facultad") {
-        next.id_programa_inst = "";
-        next.id_indicador_resultado = "";
-      }
-      if (field === "id_programa_inst") {
-        next.id_indicador_resultado = "";
-      }
-      return next;
-    });
-  };
-
-  const submit = () => onSubmit(form);
-  const canSubmit = form.nombre && form.id_desafio;
+  const canSubmit = useMemo(() => {
+    return form.nombre && form.id_desafio;
+  }, [form]);
 
   const convergenteOptions = useMemo(
     () =>
@@ -133,14 +92,45 @@ const EditModal = ({
     [indicadoresResultado, form.id_programa_inst],
   );
 
+  const handleChange = (field) => (event) => {
+    setForm((prev) => {
+      const nextValue = event.target.value;
+      const next = { ...prev, [field]: nextValue };
+      if (field === "id_desafio") {
+        next.id_estrategia_convergente = "";
+        next.id_estrategia_facultad = "";
+        next.id_programa_inst = "";
+        next.id_indicador_resultado = "";
+      }
+      if (field === "id_estrategia_convergente") {
+        next.id_estrategia_facultad = "";
+        next.id_programa_inst = "";
+        next.id_indicador_resultado = "";
+      }
+      if (field === "id_estrategia_facultad") {
+        next.id_programa_inst = "";
+        next.id_indicador_resultado = "";
+      }
+      if (field === "id_programa_inst") {
+        next.id_indicador_resultado = "";
+      }
+      return next;
+    });
+  };
+
+  const submit = () => {
+    onSubmit(form);
+  };
+
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
-      <DialogTitle>Editar indicador</DialogTitle>
+      <DialogTitle>Crear indicador</DialogTitle>
       <DialogContent dividers>
         <Grid container spacing={2} sx={{ mt: 0 }}>
           <Grid item xs={12} md={6}>
             <TextField
               fullWidth
+              height="80%"
               label="Nombre"
               value={form.nombre}
               onChange={handleChange("nombre")}
@@ -250,6 +240,22 @@ const EditModal = ({
               ))}
             </TextField>
           </Grid>
+          <Grid item xs={12} md={6}>
+            <TextField
+              select
+              fullWidth
+              label="Periodo"
+              value={form.id_periodo}
+              onChange={handleChange("id_periodo")}
+            >
+              <MenuItem value="">Sin relacion</MenuItem>
+              {periodos.map((item) => (
+                <MenuItem key={item.id} value={String(item.id)}>
+                  {toText(item.nombre || `${item.anio_ini}-${item.anio_final}`)}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
         </Grid>
       </DialogContent>
       <DialogActions>
@@ -259,11 +265,11 @@ const EditModal = ({
           onClick={submit}
           disabled={loading || !canSubmit}
         >
-          Guardar
+          Crear
         </Button>
       </DialogActions>
     </Dialog>
   );
 };
 
-export default EditModal;
+export default CreateIndicator;
