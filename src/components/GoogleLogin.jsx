@@ -1,81 +1,100 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { decodeToken } from 'react-jwt';
-import Cookies from 'js-cookie';
-import { Alert, Box, CircularProgress, Paper, Typography } from '@mui/material';
-import { getData } from '../api/api';
+import React, { useCallback, useEffect, useState } from "react";
+import { decodeToken } from "react-jwt";
+import Cookies from "js-cookie";
+import { Alert, Box, CircularProgress, Paper, Typography } from "@mui/material";
+import { getData } from "../api/api";
 
 const GOOGLE_CLIENT_ID =
   import.meta.env.VITE_GOOGLE_CLIENT_ID ||
-  '340874428494-ot9uprkvvq4ha529arl97e9mehfojm5b.apps.googleusercontent.com';
+  "340874428494-ot9uprkvvq4ha529arl97e9mehfojm5b.apps.googleusercontent.com";
 
-const formatDisplayName = (email = '', fullName = '') => {
+const formatDisplayName = (email = "", fullName = "") => {
   if (fullName) {
     return fullName;
   }
 
-  const localPart = email.split('@')[0] || '';
+  const localPart = email.split("@")[0] || "";
   return localPart
-    .split('.')
+    .split(".")
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
+    .join(" ");
 };
 
 const GoogleLogin = ({ onLoginSuccess }) => {
-  const [errorMessage, setErrorMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState("");
   const [isAuthenticating, setIsAuthenticating] = useState(false);
 
-  const handleCredentialResponse = useCallback(async (response) => {
-    if (!response?.credential) {
-      setErrorMessage('No se recibió una credencial válida de Google.');
-      return;
-    }
-
-    const decodedToken = decodeToken(response.credential);
-    const email = (decodedToken?.email || '').toLowerCase();
-
-    if (!email) {
-      setErrorMessage('No fue posible identificar el correo de la cuenta seleccionada.');
-      return;
-    }
-
-    setErrorMessage('');
-    setIsAuthenticating(true);
-
-    try {
-      const payload = await getData();
-      const users = Array.isArray(payload?.data?.USUARIOS) ? payload.data.USUARIOS : [];
-      const matchedUser = users.find((item) => (item.correo || '').toLowerCase() === email);
-
-      if (!matchedUser) {
-        setErrorMessage('Tu cuenta no está habilitada para ingresar.');
-        setIsAuthenticating(false);
+  const handleCredentialResponse = useCallback(
+    async (response) => {
+      if (!response?.credential) {
+        setErrorMessage("No se recibió una credencial válida de Google.");
         return;
       }
 
-      const secureCookie = window.location.protocol === 'https:';
-      const sessionUser = {
-        id: String(matchedUser.id || ''),
-        correo: matchedUser.correo || email,
-        rol: matchedUser.rol || 'Usuario',
-        id_dependencia: String(matchedUser.id_dependencia || ''),
-        name: formatDisplayName(email, decodedToken?.name),
-      };
+      const decodedToken = decodeToken(response.credential);
+      const email = (decodedToken?.email || "").toLowerCase();
 
-      Cookies.set('token', response.credential, {
-        expires: 5,
-        sameSite: 'Lax',
-        secure: secureCookie,
-      });
-      sessionStorage.setItem('loggedUser', JSON.stringify(sessionUser));
-      onLoginSuccess(sessionUser, payload);
-    } catch (error) {
-      console.error('Error en la solicitud:', error);
-      setErrorMessage('No fue posible validar el acceso. Intenta de nuevo.');
-    } finally {
-      setIsAuthenticating(false);
-    }
-  }, [onLoginSuccess]);
+      if (!email) {
+        setErrorMessage(
+          "No fue posible identificar el correo de la cuenta seleccionada.",
+        );
+        console.error("Token decodificado sin correo:", decodedToken);
+        console.error(
+          "Respuesta completa del manejador de credenciales:",
+          response,
+        );
+        return;
+      }
+
+      setErrorMessage("");
+      setIsAuthenticating(true);
+
+      try {
+        const payload = await getData();
+        const users = Array.isArray(payload?.data?.USUARIOS)
+          ? payload.data.USUARIOS
+          : [];
+        const matchedUser = users.find(
+          (item) => (item.correo || "").toLowerCase() === email,
+        );
+
+        if (!matchedUser) {
+          setErrorMessage("Tu cuenta no está habilitada para ingresar.");
+          setIsAuthenticating(false);
+          return;
+        }
+
+        const secureCookie = window.location.protocol === "https:";
+        const sessionUser = {
+          id: String(matchedUser.id || ""),
+          correo: matchedUser.correo || email,
+          rol: matchedUser.rol || "Usuario",
+          id_dependencia: String(matchedUser.id_dependencia || ""),
+          name: formatDisplayName(email, decodedToken?.name),
+        };
+
+        Cookies.set("token", response.credential, {
+          expires: 5,
+          sameSite: "Lax",
+          secure: secureCookie,
+        });
+        sessionStorage.setItem("loggedUser", JSON.stringify(sessionUser));
+        onLoginSuccess(sessionUser, payload);
+      } catch (error) {
+        console.error("Error en la solicitud:", error);
+        setErrorMessage("No fue posible validar el acceso. Intenta de nuevo.");
+        console.log("Error details:", {
+          message: error.message,
+          response: error.response,
+          request: error.request,
+        });
+      } finally {
+        setIsAuthenticating(false);
+      }
+    },
+    [onLoginSuccess],
+  );
 
   const initializeGoogleAuth = useCallback(() => {
     if (!window.google?.accounts?.id) {
@@ -87,17 +106,17 @@ const GoogleLogin = ({ onLoginSuccess }) => {
       callback: handleCredentialResponse,
     });
 
-    const buttonContainer = document.getElementById('buttonDiv');
+    const buttonContainer = document.getElementById("buttonDiv");
     if (!buttonContainer) {
       return;
     }
 
-    buttonContainer.innerHTML = '';
+    buttonContainer.innerHTML = "";
     window.google.accounts.id.renderButton(buttonContainer, {
-      theme: 'outline',
-      size: 'large',
-      text: 'signin_with',
-      shape: 'pill',
+      theme: "outline",
+      size: "large",
+      text: "signin_with",
+      shape: "pill",
       width: 280,
     });
 
@@ -110,20 +129,20 @@ const GoogleLogin = ({ onLoginSuccess }) => {
       return undefined;
     }
 
-    let script = document.getElementById('google-identity-script');
+    let script = document.getElementById("google-identity-script");
     if (!script) {
-      script = document.createElement('script');
-      script.src = 'https://accounts.google.com/gsi/client';
+      script = document.createElement("script");
+      script.src = "https://accounts.google.com/gsi/client";
       script.async = true;
       script.defer = true;
-      script.id = 'google-identity-script';
+      script.id = "google-identity-script";
       document.body.appendChild(script);
     }
 
-    script.addEventListener('load', initializeGoogleAuth);
+    script.addEventListener("load", initializeGoogleAuth);
 
     return () => {
-      script?.removeEventListener('load', initializeGoogleAuth);
+      script?.removeEventListener("load", initializeGoogleAuth);
     };
   }, [initializeGoogleAuth]);
 
@@ -133,28 +152,38 @@ const GoogleLogin = ({ onLoginSuccess }) => {
       justifyContent="center"
       alignItems="center"
       minHeight="100vh"
-      sx={{ backgroundColor: '#f4f6f8', padding: '16px' }}
+      sx={{ backgroundColor: "#f4f6f8", padding: "16px" }}
     >
-      <Paper elevation={4} sx={{ padding: '28px', maxWidth: '420px', width: '100%' }}>
-        <Typography variant="h5" sx={{ marginBottom: '8px', fontWeight: 700 }}>
+      <Paper
+        elevation={4}
+        sx={{ padding: "28px", maxWidth: "420px", width: "100%" }}
+      >
+        <Typography variant="h5" sx={{ marginBottom: "8px", fontWeight: 700 }}>
           Ingreso a Planeación
         </Typography>
-        <Typography variant="body2" sx={{ marginBottom: '20px' }}>
+        <Typography variant="body2" sx={{ marginBottom: "20px" }}>
           Usa tu cuenta institucional para ingresar.
         </Typography>
 
         {errorMessage && (
-          <Alert severity="error" sx={{ marginBottom: '14px' }}>
+          <Alert severity="error" sx={{ marginBottom: "14px" }}>
             {errorMessage}
           </Alert>
         )}
 
-        <Box sx={{ minHeight: '40px' }}>
+        <Box sx={{ minHeight: "40px" }}>
           <div id="buttonDiv"></div>
         </Box>
 
         {isAuthenticating && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '16px' }}>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              marginTop: "16px",
+            }}
+          >
             <CircularProgress size={20} />
             <Typography variant="body2">Validando permisos...</Typography>
           </Box>

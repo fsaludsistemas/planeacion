@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { Alert, Box, Container, Tab, Tabs, Typography } from '@mui/material';
-import Header from './components/Header';
-import LoadingIndicator from './components/LoadingIndicator';
-import GoogleLogin from './components/GoogleLogin';
-import IndicatorsPage from './pages/IndicatorsPage';
-import { getData } from './api/api';
-import Cookies from 'js-cookie';
-import './App.css';
+import React, { useState, useEffect } from "react";
+import { Alert, Box, Container, Tab, Tabs, Typography } from "@mui/material";
+import Header from "./components/Header";
+import LoadingIndicator from "./components/LoadingIndicator";
+import GoogleLogin from "./components/GoogleLogin";
+import IndicatorsPage from "./pages/IndicatorsPage";
+import Seguimientos from "./pages/Seguimientos";
+import { getData } from "./api/api";
+import Cookies from "js-cookie";
+import "./App.css";
 
 const App = () => {
   const [currentTab, setCurrentTab] = useState(0);
@@ -15,14 +16,14 @@ const App = () => {
   const [isLogged, setIsLogged] = useState(false);
   const [userInfo, setUserInfo] = useState(null);
   const [appData, setAppData] = useState(null);
-  const [dataError, setDataError] = useState('');
+  const [dataError, setDataError] = useState("");
 
   const resolveDataset = (payload) => {
-    if (payload?.data && typeof payload.data === 'object') {
+    if (payload?.data && typeof payload.data === "object") {
       return payload.data;
     }
 
-    if (payload && typeof payload === 'object') {
+    if (payload && typeof payload === "object") {
       return payload;
     }
 
@@ -30,8 +31,8 @@ const App = () => {
   };
 
   useEffect(() => {
-    const token = Cookies.get('token');
-    const storedUser = sessionStorage.getItem('loggedUser');
+    const token = Cookies.get("token");
+    const storedUser = sessionStorage.getItem("loggedUser");
 
     if (token && storedUser) {
       try {
@@ -39,13 +40,13 @@ const App = () => {
         setIsLogged(true);
         setUserInfo(parsedUser);
       } catch (error) {
-        console.error('Sesión inválida en storage:', error);
-        Cookies.remove('token');
-        sessionStorage.removeItem('loggedUser');
+        console.error("Sesión inválida en storage:", error);
+        Cookies.remove("token");
+        sessionStorage.removeItem("loggedUser");
       }
     } else {
-      Cookies.remove('token');
-      sessionStorage.removeItem('loggedUser');
+      Cookies.remove("token");
+      sessionStorage.removeItem("loggedUser");
     }
   }, []);
 
@@ -56,20 +57,20 @@ const App = () => {
       }
 
       setIsDataLoading(true);
-      setDataError('');
+      setDataError("");
 
       try {
         const payload = await getData();
         const dataset = resolveDataset(payload);
 
         if (!dataset) {
-          throw new Error('No se obtuvo un dataset válido.');
+          throw new Error("No se obtuvo un dataset válido.");
         }
 
         setAppData(dataset);
       } catch (error) {
-        console.error('Error cargando dataset principal:', error);
-        setDataError('No se pudo cargar la información de la aplicación.');
+        console.error("Error cargando dataset principal:", error);
+        setDataError("No se pudo cargar la información de la aplicación.");
       } finally {
         setIsDataLoading(false);
       }
@@ -91,17 +92,17 @@ const App = () => {
     setIsLogged(true);
     setUserInfo(sessionUser);
     setAppData(dataset);
-    setDataError('');
+    setDataError("");
   };
 
   const handleLogout = () => {
-    Cookies.remove('token');
-    sessionStorage.removeItem('loggedUser');
+    Cookies.remove("token");
+    sessionStorage.removeItem("loggedUser");
     setIsLogged(false);
     setUserInfo(null);
     setAppData(null);
     setCurrentTab(0);
-    setDataError('');
+    setDataError("");
   };
 
   const renderCurrentTab = () => {
@@ -111,19 +112,15 @@ const App = () => {
 
     if (currentTab === 1) {
       return (
-        <Box sx={{ padding: '20px 0' }}>
+        <Box sx={{ padding: "20px 0" }}>
           <Typography variant="h6">Consolidado Ind.</Typography>
           <Typography variant="body2">Módulo en desarrollo.</Typography>
         </Box>
       );
     }
-
-    return (
-      <Box sx={{ padding: '20px 0' }}>
-        <Typography variant="h6">Avances</Typography>
-        <Typography variant="body2">Módulo en desarrollo.</Typography>
-      </Box>
-    );
+    if (currentTab === 2) {
+      return <Seguimientos data={appData} />;
+    }
   };
 
   return (
@@ -138,23 +135,23 @@ const App = () => {
                 onChange={handleChange}
                 aria-label="Gestión de Indicadores Tabs"
               >
-                <Tab 
-                  label="Indicadores" 
-                  sx={{ fontSize: '1rem', fontWeight: 'bold' }}
-                  />
-                <Tab 
-                  label="Consolidado Ind." 
-                  sx={{ fontSize: '1rem', fontWeight: 'bold' }}
-                  />
-                <Tab 
-                  label="Avances" 
-                  sx={{ fontSize: '1rem', fontWeight: 'bold' }}
-                  />
+                <Tab
+                  label="Indicadores"
+                  sx={{ fontSize: "1rem", fontWeight: "bold" }}
+                />
+                <Tab
+                  label="Consolidado Ind."
+                  sx={{ fontSize: "1rem", fontWeight: "bold" }}
+                />
+                <Tab
+                  label="Seguimientos"
+                  sx={{ fontSize: "1rem", fontWeight: "bold" }}
+                />
               </Tabs>
             </Box>
             <LoadingIndicator isLoading={isLoading || isDataLoading} />
             {dataError && (
-              <Alert severity="error" sx={{ marginTop: '14px' }}>
+              <Alert severity="error" sx={{ marginTop: "14px" }}>
                 {dataError}
               </Alert>
             )}
