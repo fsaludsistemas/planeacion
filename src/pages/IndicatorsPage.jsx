@@ -30,6 +30,7 @@ import { createSheetRow, deleteSheetRow, updateSheetRow } from "../api/api";
 import "../styles/indicators.css";
 
 const SHEET_NAME = "INDICADORES_PRODUCTO";
+const META_SHEET_NAME = "METAS";
 
 const toArray = (value) => (Array.isArray(value) ? value : []);
 const toText = (value) => String(value ?? "").trim() || "No disponible";
@@ -357,11 +358,67 @@ const IndicatorsPage = ({ data, userInfo }) => {
     }
   };
 
+  const buildMetaPayload = (indicatorId, payload) => {
+    const metaFields = [
+      "meta_2025",
+      "meta_2026",
+      "meta_2027",
+      "meta_2028",
+      "meta_2029",
+      "meta_2030",
+    ];
+    const metaPayload = {
+      id_indicador_producto: String(indicatorId),
+    };
+
+    metaFields.forEach((field) => {
+      const value = payload?.[field];
+      if (value !== "" && value !== undefined && value !== null) {
+        metaPayload[field] = Number(value);
+      }
+    });
+
+    return metaPayload;
+  };
+
+  const getCreatedIndicatorId = (responseData) => {
+    console.log("Create response data:", responseData);
+    if (!responseData) return "";
+    if (typeof responseData === "string" || typeof responseData === "number") {
+      return String(responseData);
+    }
+    if (Array.isArray(responseData)) {
+      const first = responseData[0];
+      console.log("First item in array:", first);
+      return String(first?.id ?? first?.insertId ?? first?.insertedId ?? "");
+    }
+    return String(
+      responseData?.id ??
+        responseData?.insertId ??
+        responseData?.insertedId ??
+        responseData?.data?.id ??
+        "",
+    );
+  };
+
   const createIndicator = async (payload) => {
     setBusyId("create");
     setActionError("");
     try {
-      await createSheetRow(SHEET_NAME, payload);
+      const indicatorResponse = await createSheetRow(SHEET_NAME, payload);
+      console.log("Create response:", indicatorResponse);
+      const indicatorId = getCreatedIndicatorId(indicatorResponse);
+      const metaPayload = buildMetaPayload(indicatorId, payload);
+      console.log("Meta payload:", metaPayload);
+      if (indicatorId && Object.keys(metaPayload).length > 1) {
+        await createSheetRow(META_SHEET_NAME, metaPayload);
+        console.log(
+          "Meta created for indicator ID:",
+          indicatorId,
+          "with payload:",
+          metaPayload,
+        );
+      }
       setCreateOpen(false);
       window.location.reload();
     } catch (error) {
@@ -726,6 +783,7 @@ const IndicatorsPage = ({ data, userInfo }) => {
         programasInstitucionales={programasInstitucionales}
         indicadoresResultado={indicadoresResultado}
         periodos={periodos}
+        metas={metas}
         onClose={() => setCreateOpen(false)}
         onSubmit={createIndicator}
       />
@@ -740,6 +798,7 @@ const IndicatorsPage = ({ data, userInfo }) => {
         estrategiasFacultad={estrategiasFacultad}
         programasInstitucionales={programasInstitucionales}
         indicadoresResultado={indicadoresResultado}
+        metas={metas}
         periodos={[]}
         onClose={() => setEditState({ open: false, indicator: null })}
         onSubmit={(payload) => updateIndicator(editState.indicator.id, payload)}

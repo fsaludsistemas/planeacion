@@ -17,6 +17,8 @@ export const getData = async () => {
 export const createSheetRow = async (sheetName, data) => {
   try {
   const response = await api.post(`/${sheetName}`, {data} );
+  console.log("Create sheet row response:", response);
+  console.log("Response data:", response.data);
   return response.data;
   } catch (error) {
     console.error("Error creating sheet row:", error);

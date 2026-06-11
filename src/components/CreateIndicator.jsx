@@ -19,7 +19,13 @@ const emptyForm = {
   id_estrategia_facultad: "",
   id_programa_inst: "",
   id_indicador_resultado: "",
-  id_periodo: "",
+  id_periodo: "1",
+  meta_2025: "",
+  meta_2026: "",
+  meta_2027: "",
+  meta_2028: "",
+  meta_2029: "",
+  meta_2030: "",
 };
 
 const toText = (value) => String(value ?? "").trim() || "No disponible";
@@ -46,6 +52,12 @@ const CreateIndicator = ({
   const canSubmit = useMemo(() => {
     return form.nombre && form.id_desafio;
   }, [form]);
+
+  const handleMetaChange = (field) => (event) => {
+    const nextValue = event.target.value;
+    if (nextValue !== "" && Number.isNaN(Number(nextValue))) return;
+    setForm((prev) => ({ ...prev, [field]: nextValue }));
+  };
 
   const convergenteOptions = useMemo(
     () =>
@@ -130,6 +142,8 @@ const CreateIndicator = ({
           <Grid item xs={12} md={6}>
             <TextField
               fullWidth
+              multiline
+              minRows={4}
               height="80%"
               label="Nombre"
               value={form.nombre}
@@ -240,21 +254,65 @@ const CreateIndicator = ({
               ))}
             </TextField>
           </Grid>
-          <Grid item xs={12} md={6}>
+          <Grid item xs={8} md={2}>
             <TextField
-              select
               fullWidth
-              label="Periodo"
-              value={form.id_periodo}
-              onChange={handleChange("id_periodo")}
-            >
-              <MenuItem value="">Sin relacion</MenuItem>
-              {periodos.map((item) => (
-                <MenuItem key={item.id} value={String(item.id)}>
-                  {toText(item.nombre || `${item.anio_ini}-${item.anio_final}`)}
-                </MenuItem>
-              ))}
-            </TextField>
+              label="Meta 2025"
+              type="number"
+              inputProps={{ step: "any" }}
+              value={form.meta_2025}
+              onChange={handleMetaChange("meta_2025")}
+            />
+          </Grid>
+          <Grid item xs={8} md={2}>
+            <TextField
+              fullWidth
+              label="Meta 2026"
+              type="number"
+              inputProps={{ step: "any" }}
+              value={form.meta_2026}
+              onChange={handleMetaChange("meta_2026")}
+            />
+          </Grid>
+          <Grid item xs={8} md={2}>
+            <TextField
+              fullWidth
+              label="Meta 2027"
+              type="number"
+              inputProps={{ step: "any" }}
+              value={form.meta_2027}
+              onChange={handleMetaChange("meta_2027")}
+            />
+          </Grid>
+          <Grid item xs={8} md={2}>
+            <TextField
+              fullWidth
+              label="Meta 2028"
+              type="number"
+              inputProps={{ step: "any" }}
+              value={form.meta_2028}
+              onChange={handleMetaChange("meta_2028")}
+            />
+          </Grid>
+          <Grid item xs={8} md={2}>
+            <TextField
+              fullWidth
+              label="Meta 2029"
+              type="number"
+              inputProps={{ step: "any" }}
+              value={form.meta_2029}
+              onChange={handleMetaChange("meta_2029")}
+            />
+          </Grid>
+          <Grid item xs={8} md={2}>
+            <TextField
+              fullWidth
+              label="Meta 2030"
+              type="number"
+              inputProps={{ step: "any" }}
+              value={form.meta_2030}
+              onChange={handleMetaChange("meta_2030")}
+            />
           </Grid>
         </Grid>
       </DialogContent>

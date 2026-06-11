@@ -88,6 +88,60 @@ const Seguimientos = ({ data }) => {
     [metas, avances],
   );
 
+  function limpiarPorcentaje(dato) {
+    // Si es un string, quita el símbolo % y los espacios vacíos
+    if (typeof dato === "string") {
+      dato = dato.replace("%", "").trim();
+    }
+    // Convierte a número flotante (ej: "15.5" pasa a 15.5)
+    return parseFloat(dato);
+  }
+
+  const contadorIndicadores = (avancesValue) => {
+    const porcentaje = limpiarPorcentaje(avancesValue);
+    let bajo = 0;
+    let medio = 0;
+    let alto = 0;
+    let superior = 0;
+    if (porcentaje >= 90) {
+      superior++;
+    }
+    if (porcentaje >= 50 && porcentaje < 89) {
+      alto++;
+    }
+    if (porcentaje >= 30 && porcentaje < 49) {
+      medio++;
+    }
+    if (porcentaje >= 0 && porcentaje < 29) {
+      bajo++;
+    }
+    console.log({ bajo, medio, alto, superior });
+    return { bajo, medio, alto, superior };
+  };
+
+  function calcularCumplimientoTotal(arregloMetas) {
+    // 1. Validar que el arreglo no esté vacío para evitar división por cero
+    if (!arregloMetas || arregloMetas.length === 0) return "0%";
+
+    // 2. Sumar los porcentajes procesados
+    const sumaPorcentajes = arregloMetas.reduce((acumulado, meta) => {
+      // Si viene como string (ej: "57,6%"), cambiamos la coma por punto y quitamos el %
+      let valorLimpio = String(meta).replace("%", "").replace(",", ".").trim();
+
+      // Convertimos a número decimal
+      let numero = parseFloat(valorLimpio);
+
+      // Si el dato no es válido, sumamos 0
+      return acumulado + (isNaN(numero) ? 0 : numero);
+    }, 0);
+
+    // 3. Calcular el promedio (Suma total / Cantidad de metas)
+    const promedio = sumaPorcentajes / arregloMetas.length;
+
+    // 4. Retornar el resultado formateado (con un decimal y el símbolo %)
+    return `${promedio.toFixed(1).replace(".", ",")}%`;
+  }
+
   const currentYear = String(new Date().getFullYear());
   const initialYear = availableYears.includes(currentYear)
     ? currentYear
@@ -139,20 +193,42 @@ const Seguimientos = ({ data }) => {
     selectedYear,
   ]);
 
+  const totales = rowsByDesafio.reduce(
+    (acumulador, group) => {
+      group.indicators.forEach((indicator) => {
+        const conteo = contadorIndicadores(indicator.avanceValue);
+
+        // Sumamos el valor actual al acumulador (aseguramos que sea número)
+        acumulador.superior += conteo.superior || 0;
+        acumulador.alto += conteo.alto || 0;
+        acumulador.medio += conteo.medio || 0;
+        acumulador.bajo += conteo.bajo || 0;
+      });
+      return acumulador;
+    },
+    { superior: 0, alto: 0, medio: 0, bajo: 0 }, // Valores iniciales en 0
+  );
+
   const totals = useMemo(() => {
+    let totalIndicadores = 0;
     const executed = rowsByDesafio.reduce((sum, group) => {
       return (
         sum +
         group.indicators.reduce((inner, indicator) => {
-          const value = toNumber(indicator.avanceValue);
-          return inner + (value ?? 0);
+          let valorLimpio = String(indicator.avanceValue)
+            .replace("%", "")
+            .replace(",", ".")
+            .trim();
+          let numero = parseFloat(valorLimpio);
+          totalIndicadores++;
+          return inner + (numero ?? 0);
         }, 0)
       );
     }, 0);
-
+    const promedio = executed / totalIndicadores;
     return {
-      executed,
-      pending: Math.max(0, 100 - executed),
+      promedio,
+      pending: Math.max(0, 100 - promedio),
     };
   }, [rowsByDesafio]);
 
@@ -212,7 +288,7 @@ const Seguimientos = ({ data }) => {
       <Box className="seguimientos-layout">
         <TableContainer component={Paper} className="seguimientos-table-card">
           <Table size="small">
-            <TableHead>
+            <TableBody>
               <TableRow>
                 <TableCell sx={{ fontWeight: 800 }}>Desafio</TableCell>
                 <TableCell sx={{ fontWeight: 800 }}>Nombre Indicador</TableCell>
@@ -220,8 +296,6 @@ const Seguimientos = ({ data }) => {
                 <TableCell sx={{ fontWeight: 800 }}>Meta ejecutada</TableCell>
                 <TableCell sx={{ fontWeight: 800 }}>Porcentaje Real</TableCell>
               </TableRow>
-            </TableHead>
-            <TableBody>
               {rowsByDesafio.map((group) =>
                 group.indicators.map((indicator, index) => (
                   <TableRow key={`${group.desafio.id}-${indicator.id}`}>
@@ -235,12 +309,29 @@ const Seguimientos = ({ data }) => {
                     )}
                     <TableCell>{toText(indicator.nombre)}</TableCell>
                     <TableCell>{formatPercent(indicator.metaValue)}</TableCell>
-                    <TableCell>
-                      {formatPercent(indicator.avanceValue)}
-                    </TableCell>
-                    <TableCell>
-                      {formatPercent(indicator.avanceValue)}
-                    </TableCell>
+                    <TableCell>{indicator.avanceValue}</TableCell>
+                    {limpiarPorcentaje(indicator.avanceValue) >= 90 ? (
+                      <TableCell sx={{ backgroundColor: "lightgreen" }}>
+                        {indicator.avanceValue}
+                      </TableCell>
+                    ) : limpiarPorcentaje(indicator.avanceValue) >= 50 &&
+                      limpiarPorcentaje(indicator.avanceValue) < 90 ? (
+                      <TableCell sx={{ backgroundColor: "lightblue" }}>
+                        {indicator.avanceValue}
+                      </TableCell>
+                    ) : limpiarPorcentaje(indicator.avanceValue) >= 30 &&
+                      limpiarPorcentaje(indicator.avanceValue) < 50 ? (
+                      <TableCell sx={{ backgroundColor: "yellow" }}>
+                        {indicator.avanceValue}
+                      </TableCell>
+                    ) : limpiarPorcentaje(indicator.avanceValue) >= 0 &&
+                      limpiarPorcentaje(indicator.avanceValue) < 30 ? (
+                      <TableCell sx={{ backgroundColor: "salmon" }}>
+                        {indicator.avanceValue}
+                      </TableCell>
+                    ) : (
+                      <TableCell>{indicator.avanceValue}</TableCell>
+                    )}
                   </TableRow>
                 )),
               )}
@@ -248,22 +339,18 @@ const Seguimientos = ({ data }) => {
                 <TableCell colSpan={3} sx={{ fontWeight: 800 }}>
                   Total porcentaje ejecutado
                 </TableCell>
+                <TableCell sx={{ fontWeight: 800 }}></TableCell>
                 <TableCell sx={{ fontWeight: 800 }}>
-                  {formatPercent(totals.executed)}
-                </TableCell>
-                <TableCell sx={{ fontWeight: 800 }}>
-                  {formatPercent(totals.executed)}
+                  {`${totals.promedio.toFixed(1).replace(".", ",")}%`}
                 </TableCell>
               </TableRow>
               <TableRow>
                 <TableCell colSpan={3} sx={{ fontWeight: 800 }}>
                   Pendiente por ejecutar
                 </TableCell>
+                <TableCell sx={{ fontWeight: 800 }}></TableCell>
                 <TableCell sx={{ fontWeight: 800 }}>
-                  {formatPercent(totals.pending)}
-                </TableCell>
-                <TableCell sx={{ fontWeight: 800 }}>
-                  {formatPercent(totals.pending)}
+                  {`${totals.pending.toFixed(1).replace(".", ",")}%`}
                 </TableCell>
               </TableRow>
             </TableBody>
@@ -279,7 +366,7 @@ const Seguimientos = ({ data }) => {
               <TableHead>
                 <TableRow>
                   <TableCell sx={{ fontWeight: 800 }}>Concepto</TableCell>
-                  <TableCell sx={{ fontWeight: 800 }}>Valor</TableCell>
+                  <TableCell sx={{ fontWeight: 800 }}>Cantidad</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -301,24 +388,101 @@ const Seguimientos = ({ data }) => {
               </TableBody>
             </Table>
           </TableContainer>
-        </Paper>
-        <Box className="seguimientos-chart">
-          <PieChart width={300} height={300}>
-            <Pie
-              data={[
-                { name: "Ejecutado", value: totals.executed },
-                { name: "Pendiente", value: totals.pending },
+          <Box className="seguimientos-chart">
+            <PieChart
+              series={[
+                {
+                  data: [
+                    {
+                      id: 0,
+                      value: totals.promedio,
+                      label: "Ejecutado",
+                      color: "green",
+                    },
+                    {
+                      id: 1,
+                      value: totals.pending,
+                      label: "Pendiente",
+                      color: "red",
+                    },
+                  ],
+                },
               ]}
-              dataKey="value"
-              nameKey="name"
-              cx="50%"
-              cy="50%"
-              outerRadius={100}
-              fill="#8884d8"
-              label={(entry) => `${entry.name}: ${formatPercent(entry.value)}`}
-            />
-          </PieChart>
-        </Box>
+              width={250}
+              height={250}
+              slotProps={{
+                legend: {
+                  padding: -10, // Aumenta este número para alejar los labels del círculo
+                },
+              }}
+            ></PieChart>
+          </Box>
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 800, mb: 1 }}>
+              Contador de indicadores y significado de colores
+            </Typography>
+            <TableContainer>
+              <Table size="small">
+                <TableBody>
+                  {/* FILA 1: SUPERIOR */}
+                  <TableRow>
+                    <TableCell
+                      sx={{
+                        fontWeight: 800,
+                        backgroundColor: "#f5f5f5",
+                      }}
+                    >
+                      Mayores de 90%
+                    </TableCell>
+
+                    <TableCell sx={{ backgroundColor: "lightgreen" }}>
+                      {totales.superior}
+                    </TableCell>
+                  </TableRow>
+
+                  {/* FILA 2: ALTO */}
+                  <TableRow>
+                    <TableCell
+                      sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}
+                    >
+                      Entre 50% y 89%
+                    </TableCell>
+
+                    <TableCell sx={{ backgroundColor: "lightblue" }}>
+                      {totales.alto}
+                    </TableCell>
+                  </TableRow>
+
+                  {/* FILA 3: MEDIO */}
+                  <TableRow>
+                    <TableCell
+                      sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}
+                    >
+                      Entre 30% y 49%
+                    </TableCell>
+
+                    <TableCell sx={{ backgroundColor: "yellow" }}>
+                      {totales.medio}
+                    </TableCell>
+                  </TableRow>
+
+                  {/* FILA 4: BAJO */}
+                  <TableRow>
+                    <TableCell
+                      sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}
+                    >
+                      Entre 0% y 29%
+                    </TableCell>
+
+                    <TableCell sx={{ backgroundColor: "salmon" }}>
+                      {totales.bajo}
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+        </Paper>
       </Box>
 
       {!rowsByDesafio.length && (
