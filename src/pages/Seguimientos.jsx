@@ -60,8 +60,27 @@ const buildYearKeys = (metas, avances) => {
   return [...keys].sort((a, b) => Number(a) - Number(b));
 };
 
-const Seguimientos = ({ data }) => {
+const Seguimientos = ({ data, userInfo }) => {
+  const sessionUser = useMemo(() => {
+    if (userInfo) return userInfo;
+    try {
+      const stored = sessionStorage.getItem("loggedUser");
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  }, [userInfo]);
+
+  const userDependencyId = String(sessionUser?.id_dependencia || "").trim();
+  const isSystemUser =
+    userDependencyId === "0" || normalize(sessionUser?.permiso) === "sistemas";
+
   const desafios = useMemo(() => sortById(getSheet(data, "DESAFIOS")), [data]);
+  const dependencias = useMemo(
+    () => sortById(getSheet(data, "DEPENDENCIA", "DEPENDENCIAS")),
+    [data],
+  );
+
   const indicators = useMemo(
     () => sortById(getSheet(data, "INDICADORES_PRODUCTO")),
     [data],
@@ -72,6 +91,10 @@ const Seguimientos = ({ data }) => {
   const desafioById = useMemo(
     () => new Map(desafios.map((item) => [String(item.id), item])),
     [desafios],
+  );
+  const dependenciaById = useMemo(
+    () => new Map(dependencias.map((item) => [String(item.id), item])),
+    [dependencias],
   );
   const metaByIndicatorId = useMemo(
     () =>
@@ -87,6 +110,8 @@ const Seguimientos = ({ data }) => {
     () => buildYearKeys(metas, avances),
     [metas, avances],
   );
+
+  const [selectedDependency, setSelectedDependency] = useState("");
 
   function limpiarPorcentaje(dato) {
     // Si es un string, quita el símbolo % y los espacios vacíos
@@ -161,6 +186,13 @@ const Seguimientos = ({ data }) => {
     const grouped = new Map();
 
     indicators.forEach((indicator) => {
+      if (
+        selectedDependency &&
+        String(indicator.id_dependencia ?? "") !== selectedDependency
+      ) {
+        return;
+      }
+
       const challengeId = String(indicator.id_desafio ?? "");
       const desafio = desafioById.get(challengeId);
       if (!desafio) return;
@@ -188,6 +220,32 @@ const Seguimientos = ({ data }) => {
   }, [
     indicators,
     desafioById,
+    metaByIndicatorId,
+    avanceByIndicatorId,
+    selectedYear,
+    selectedDependency,
+  ]);
+
+  const dependencyOptions = useMemo(() => {
+    const counts = new Map();
+
+    indicators.forEach((indicator) => {
+      const dependencyId = String(indicator.id_dependencia ?? "");
+      if (!dependencyId) return;
+
+      const meta = metaByIndicatorId.get(String(indicator.id));
+      const avance = avanceByIndicatorId.get(String(indicator.id));
+      const metaValue = meta ? meta[`meta_${selectedYear}`] : null;
+      const avanceValue = avance ? avance[`avance_${selectedYear}`] : null;
+      if (metaValue == null && avanceValue == null) return;
+
+      counts.set(dependencyId, (counts.get(dependencyId) || 0) + 1);
+    });
+
+    return dependencias.filter((item) => counts.has(String(item.id)));
+  }, [
+    dependencias,
+    indicators,
     metaByIndicatorId,
     avanceByIndicatorId,
     selectedYear,
@@ -280,6 +338,22 @@ const Seguimientos = ({ data }) => {
                   </MenuItem>
                 ),
               )}
+            </Select>
+          </FormControl>
+
+          <FormControl size="small" sx={{ minWidth: 220 }}>
+            <InputLabel>Dependencia</InputLabel>
+            <Select
+              value={selectedDependency}
+              label="Dependencia"
+              onChange={(event) => setSelectedDependency(event.target.value)}
+            >
+              <MenuItem value="">Todas</MenuItem>
+              {dependencyOptions.map((item) => (
+                <MenuItem key={item.id} value={String(item.id)}>
+                  {toText(item.nombre)}
+                </MenuItem>
+              ))}
             </Select>
           </FormControl>
         </Box>
