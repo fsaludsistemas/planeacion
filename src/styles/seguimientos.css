@@ -14,6 +14,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .seguimientos-layout {
@@ -51,5 +52,9 @@
   .seguimientos-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .seguimientos-header .MuiFormControl-root {
+    width: 100%;
   }
 }

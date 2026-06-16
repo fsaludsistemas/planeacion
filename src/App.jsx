@@ -119,7 +119,7 @@ const App = () => {
       );
     }
     if (currentTab === 2) {
-      return <Seguimientos data={appData} />;
+      return <Seguimientos data={appData} userInfo={userInfo} />;
     }
   };
 
