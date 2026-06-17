@@ -7,6 +7,7 @@ import {
   Button,
   FormControl,
   FormControlLabel,
+  Input,
   InputLabel,
   MenuItem,
   Paper,
@@ -19,6 +20,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TextField,
   Typography,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -31,6 +33,7 @@ import "../styles/indicators.css";
 
 const SHEET_NAME = "INDICADORES_PRODUCTO";
 const META_SHEET_NAME = "METAS";
+const EVIDENCE_URL_FIELD = "url_documento_evidencia";
 
 const toArray = (value) => (Array.isArray(value) ? value : []);
 const toText = (value) => String(value ?? "").trim() || "No disponible";
@@ -77,6 +80,7 @@ const IndicatorsPage = ({ data, userInfo }) => {
   const [expandedId, setExpandedId] = useState(null);
   const [actionError, setActionError] = useState("");
   const [busyId, setBusyId] = useState("");
+  const [evidenceUrls, setEvidenceUrls] = useState({});
 
   const sessionUser = useMemo(() => {
     if (userInfo) return userInfo;
@@ -356,6 +360,35 @@ const IndicatorsPage = ({ data, userInfo }) => {
     } finally {
       setBusyId("");
     }
+  };
+
+  const getEvidenceUrl = (indicator) => {
+    const storedValue = evidenceUrls[String(indicator.id)];
+    if (storedValue !== undefined) return storedValue;
+    return String(
+      indicator?.[EVIDENCE_URL_FIELD] ?? indicator?.urlDocumentoEvidencia ?? "",
+    );
+  };
+
+  const handleEvidenceUrlChange = (indicatorId) => (event) => {
+    const value = event.target.value;
+    setEvidenceUrls((prev) => ({
+      ...prev,
+      [String(indicatorId)]: value,
+    }));
+  };
+
+  const handleEvidenceUrlBlur = (indicator) => async () => {
+    const nextValue = getEvidenceUrl(indicator).trim();
+    const currentValue = String(
+      indicator?.[EVIDENCE_URL_FIELD] ?? indicator?.urlDocumentoEvidencia ?? "",
+    ).trim();
+
+    if (nextValue === currentValue) return;
+
+    await updateIndicator(indicator.id, {
+      [EVIDENCE_URL_FIELD]: nextValue,
+    });
   };
 
   const buildMetaPayload = (indicatorId, payload) => {
@@ -746,13 +779,30 @@ const IndicatorsPage = ({ data, userInfo }) => {
                   </TableBody>
                 </Table>
               </TableContainer>
-              <Box sx={{ mt: 2 }}>
-                <Typography className="detail-label">
+              <Box
+                sx={{
+                  mt: 2,
+                  display: "grid",
+                  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                  gap: 2,
+                  alignItems: "start",
+                }}
+              >
+                <Typography className="detail-label" sx={{ mb: 1 }}>
                   URL documento evidencia
                 </Typography>
-                <Typography className="detail-value">
-                  {toText(indicator.meta?.url || indicator.avance?.url || "")}
-                </Typography>
+                <Box />
+                <TextField
+                  fullWidth
+                  size="small"
+                  placeholder="URL del documento de evidencia"
+                  value={getEvidenceUrl(indicator)}
+                  onChange={handleEvidenceUrlChange(indicator.id)}
+                  onBlur={handleEvidenceUrlBlur(indicator)}
+                />
+                <Box />
+
+                <Box />
               </Box>
             </AccordionDetails>
           </Accordion>
