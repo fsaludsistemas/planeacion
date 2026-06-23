@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from "react";
-import { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Button,
+  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   Grid,
   MenuItem,
   TextField,
@@ -15,12 +16,16 @@ const emptyForm = {
   nombre: "",
   objetivo_escuela: "",
   id_dependencia: "",
+  id_responde_a: "",
   id_desafio: "",
   id_estrategia_convergente: "",
   id_estrategia_facultad: "",
   id_programa_inst: "",
   id_indicador_resultado: "",
   id_periodo: "",
+  logro: "",
+  responsable: "",
+  suma_facultad: false,
 };
 
 const toText = (value) => String(value ?? "").trim() || "No disponible";
@@ -30,12 +35,15 @@ const EditModal = ({
   loading,
   indicator,
   dependencias,
+  respondeAs,
   desafios,
   estrategiasConvergentes,
   estrategiasFacultad,
   programasInstitucionales,
   indicadoresResultado,
   periodos,
+  usuarios,
+  mode = "full",
   onClose,
   onSubmit,
 }) => {
@@ -47,6 +55,7 @@ const EditModal = ({
         nombre: indicator.nombre || "",
         objetivo_escuela: indicator.objetivo_escuela || "",
         id_dependencia: String(indicator.id_dependencia || ""),
+        id_responde_a: String(indicator.id_responde_a || ""),
         id_desafio: String(indicator.id_desafio || ""),
         id_estrategia_convergente: String(
           indicator.id_estrategia_convergente || "",
@@ -55,6 +64,12 @@ const EditModal = ({
         id_programa_inst: String(indicator.id_programa_inst || ""),
         id_indicador_resultado: String(indicator.id_indicador_resultado || ""),
         id_periodo: String(indicator.id_periodo || ""),
+        logro: String(indicator.logro || ""),
+        responsable: String(indicator.responsable || ""),
+        suma_facultad:
+          String(indicator.suma_facultad).toLowerCase() === "true" ||
+          indicator.suma_facultad === true ||
+          indicator.suma_facultad === 1,
       });
     }
   }, [open, indicator]);
@@ -132,12 +147,34 @@ const EditModal = ({
         : indicadoresResultado,
     [indicadoresResultado, form.id_programa_inst],
   );
+  const responsableOptions = useMemo(() => {
+    if (!form.id_dependencia) return [];
+    return usuarios.filter(
+      (item) =>
+        String(item.id_dependencia || "") === String(form.id_dependencia || ""),
+    );
+  }, [usuarios, form.id_dependencia]);
+
+  const isLogroOnly = mode === "logro";
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
       <DialogTitle>Editar indicador</DialogTitle>
       <DialogContent dividers>
         <Grid container spacing={2} sx={{ mt: 0 }}>
+          {isLogroOnly ? (
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                multiline
+                minRows={5}
+                label="Logro"
+                value={form.logro}
+                onChange={handleChange("logro")}
+              />
+            </Grid>
+          ) : (
+            <>
           <Grid item xs={12} md={6}>
             <TextField
               fullWidth
@@ -165,6 +202,22 @@ const EditModal = ({
               onChange={handleChange("id_dependencia")}
             >
               {dependencias.map((item) => (
+                <MenuItem key={item.id} value={String(item.id)}>
+                  {toText(item.nombre)}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <TextField
+              select
+              fullWidth
+              label="Responde a"
+              value={form.id_responde_a}
+              onChange={handleChange("id_responde_a")}
+            >
+              <MenuItem value="">Sin relacion</MenuItem>
+              {respondeAs.map((item) => (
                 <MenuItem key={item.id} value={String(item.id)}>
                   {toText(item.nombre)}
                 </MenuItem>
@@ -250,6 +303,52 @@ const EditModal = ({
               ))}
             </TextField>
           </Grid>
+          <Grid item xs={12} md={4}>
+            <TextField
+              fullWidth
+              multiline
+              minRows={4}
+              label="Logro (opcional)"
+              value={form.logro}
+              onChange={handleChange("logro")}
+            />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <TextField
+              select
+              fullWidth
+              label="Responsable"
+              value={form.responsable}
+              onChange={handleChange("responsable")}
+              disabled={!form.id_dependencia}
+            >
+              <MenuItem value="">Sin responsable</MenuItem>
+              {responsableOptions.map((item) => (
+                <MenuItem key={item.id} value={String(item.id)}>
+                  {toText(item.correo)}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <FormControlLabel
+              sx={{ mt: 1 }}
+              control={
+                <Checkbox
+                  checked={Boolean(form.suma_facultad)}
+                  onChange={(event) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      suma_facultad: event.target.checked,
+                    }))
+                  }
+                />
+              }
+              label="Suma facultad"
+            />
+          </Grid>
+            </>
+          )}
         </Grid>
       </DialogContent>
       <DialogActions>

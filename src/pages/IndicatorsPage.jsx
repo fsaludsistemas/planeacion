@@ -34,9 +34,9 @@ import "../styles/indicators.css";
 const SHEET_NAME = "INDICADORES_PRODUCTO";
 const META_SHEET_NAME = "METAS";
 const EVIDENCE_URL_FIELD = "url_documento_evidencia";
-
-const toArray = (value) => (Array.isArray(value) ? value : []);
+const USERS_SHEET_NAME = "USUARIOS";
 const toText = (value) => String(value ?? "").trim() || "No disponible";
+const normalizeRole = (value) => normalize(value);
 const normalize = (value) =>
   String(value ?? "")
     .trim()
@@ -65,6 +65,7 @@ const IndicatorsPage = ({ data, userInfo }) => {
   const [filters, setFilters] = useState({
     dependencia: "",
     tipoDependencia: "TODAS",
+    respondeA: "",
     desafio: "",
     estrategiaConvergente: "",
     estrategiaFacultad: "",
@@ -81,6 +82,7 @@ const IndicatorsPage = ({ data, userInfo }) => {
   const [actionError, setActionError] = useState("");
   const [busyId, setBusyId] = useState("");
   const [evidenceUrls, setEvidenceUrls] = useState({});
+  const [logroValues, setLogroValues] = useState({});
 
   const sessionUser = useMemo(() => {
     if (userInfo) return userInfo;
@@ -96,8 +98,13 @@ const IndicatorsPage = ({ data, userInfo }) => {
     () => sortById(getSheet(data, "INDICADORES_PRODUCTO")),
     [data],
   );
+  const usuarios = useMemo(() => sortById(getSheet(data, USERS_SHEET_NAME)), [data]);
   const dependencias = useMemo(
     () => sortById(getSheet(data, "DEPENDENCIA", "DEPENDENCIAS")),
+    [data],
+  );
+  const respondeAs = useMemo(
+    () => sortById(getSheet(data, "RESPONDE_A")),
     [data],
   );
   const desafios = useMemo(() => sortById(getSheet(data, "DESAFIOS")), [data]);
@@ -127,6 +134,7 @@ const IndicatorsPage = ({ data, userInfo }) => {
 
   const byId = (items) => new Map(items.map((item) => [String(item.id), item]));
   const dependenciaById = useMemo(() => byId(dependencias), [dependencias]);
+  const respondeAById = useMemo(() => byId(respondeAs), [respondeAs]);
   const desafioById = useMemo(() => byId(desafios), [desafios]);
   const convergenteById = useMemo(
     () => byId(estrategiasConvergentes),
@@ -154,15 +162,22 @@ const IndicatorsPage = ({ data, userInfo }) => {
     () => new Map(avances.map((item) => [String(item.id_indicador), item])),
     [avances],
   );
+  const userById = useMemo(
+    () => new Map(usuarios.map((item) => [String(item.id), item])),
+    [usuarios],
+  );
 
   const userDependencyId = String(sessionUser?.id_dependencia || "").trim();
-  const isSystemUser =
-    userDependencyId === "0" || normalize(sessionUser?.permiso) === "sistemas";
+  const userRole = normalizeRole(sessionUser?.rol || sessionUser?.permiso);
+  const isAdminOrSystems =
+    userDependencyId === "0" || userRole === "sistemas" || userRole === "administrador";
+  const isRegularUser = userRole === "usuario";
 
   const baseRows = useMemo(() => {
     return indicators.map((indicator) => ({
       ...indicator,
       dependencia: dependenciaById.get(String(indicator.id_dependencia)),
+      respondeA: respondeAById.get(String(indicator.id_responde_a)),
       desafio: desafioById.get(String(indicator.id_desafio)),
       estrategiaConvergente: convergenteById.get(
         String(indicator.id_estrategia_convergente),
@@ -179,10 +194,12 @@ const IndicatorsPage = ({ data, userInfo }) => {
       periodo: periodoById.get(String(indicator.id_periodo)),
       meta: metaByIndicatorId.get(String(indicator.id)),
       avance: avanceByIndicatorId.get(String(indicator.id)),
+      responsableUsuario: userById.get(String(indicator.responsable)),
     }));
   }, [
     indicators,
     dependenciaById,
+    respondeAById,
     desafioById,
     convergenteById,
     facultadById,
@@ -191,16 +208,23 @@ const IndicatorsPage = ({ data, userInfo }) => {
     periodoById,
     metaByIndicatorId,
     avanceByIndicatorId,
+    userById,
   ]);
 
   const visibleRows = useMemo(() => {
-    if (isSystemUser || !userDependencyId) return baseRows;
+    if (isAdminOrSystems || !userDependencyId) return baseRows;
     return baseRows.filter(
       (row) => String(row.id_dependencia || "") === userDependencyId,
     );
-  }, [baseRows, isSystemUser, userDependencyId]);
+  }, [baseRows, isAdminOrSystems, userDependencyId]);
 
   const filterOptions = useMemo(() => {
+    const filteredDependencias =
+      filters.tipoDependencia === "TODAS"
+        ? dependencias
+        : dependencias.filter(
+            (item) => getTipoDependencia(item) === filters.tipoDependencia,
+          );
     const selectedDesafioIds = filters.desafio
       ? [filters.desafio]
       : desafios.map((item) => String(item.id));
@@ -216,9 +240,7 @@ const IndicatorsPage = ({ data, userInfo }) => {
       : estrategiasFacultad
           .filter((item) =>
             selectedConvergenteIds.includes(
-              String(
-                item.id_convergente || item.id_estrategia_convergente || "",
-              ),
+              String(item.id_estrategia_convergente || item.id_convergente || ""),
             ),
           )
           .map((item) => String(item.id));
@@ -232,7 +254,8 @@ const IndicatorsPage = ({ data, userInfo }) => {
           )
           .map((item) => String(item.id));
     return {
-      dependencias: dependencias,
+      dependencias: sortById(filteredDependencias),
+      respondeAs,
       desafios: sortById(desafios),
       estrategiasConvergentes: sortById(
         estrategiasConvergentes.filter((item) =>
@@ -242,7 +265,7 @@ const IndicatorsPage = ({ data, userInfo }) => {
       estrategiasFacultad: sortById(
         estrategiasFacultad.filter((item) =>
           selectedConvergenteIds.includes(
-            String(item.id_convergente || item.id_estrategia_convergente || ""),
+            String(item.id_estrategia_convergente || item.id_convergente || ""),
           ),
         ),
       ),
@@ -266,11 +289,12 @@ const IndicatorsPage = ({ data, userInfo }) => {
     estrategiasFacultad,
     programasInstitucionales,
     indicadoresResultado,
+    respondeAs,
     filters.desafio,
     filters.estrategiaConvergente,
     filters.estrategiaFacultad,
     filters.programaInstitucional,
-    visibleRows,
+    filters.tipoDependencia,
   ]);
 
   const filteredRows = useMemo(() => {
@@ -284,6 +308,12 @@ const IndicatorsPage = ({ data, userInfo }) => {
       if (
         filters.tipoDependencia !== "TODAS" &&
         getTipoDependencia(row.dependencia) !== filters.tipoDependencia
+      ) {
+        return false;
+      }
+      if (
+        filters.respondeA &&
+        String(row.id_responde_a) !== filters.respondeA
       ) {
         return false;
       }
@@ -318,8 +348,25 @@ const IndicatorsPage = ({ data, userInfo }) => {
     });
   }, [visibleRows, filters]);
 
+  const clearFilters = () => {
+    setFilters({
+      dependencia: "",
+      tipoDependencia: "TODAS",
+      respondeA: "",
+      desafio: "",
+      estrategiaConvergente: "",
+      estrategiaFacultad: "",
+      programaInstitucional: "",
+      indicadorResultado: "",
+    });
+    setExpandedId(null);
+  };
+
   const resetBelow = (field, next) => {
     const updated = { ...next };
+    if (field === "tipoDependencia") {
+      updated.dependencia = "";
+    }
     if (field === "desafio") {
       updated.estrategiaConvergente = "";
       updated.estrategiaFacultad = "";
@@ -362,6 +409,12 @@ const IndicatorsPage = ({ data, userInfo }) => {
     }
   };
 
+  const canEditAllIndicators = isAdminOrSystems;
+  const canEditLogroOnly = isRegularUser;
+  const currentUserId = String(sessionUser?.id || "");
+  const isIndicatorOwnedByUser = (indicator) =>
+    String(indicator.responsable || "") === currentUserId;
+
   const getEvidenceUrl = (indicator) => {
     const storedValue = evidenceUrls[String(indicator.id)];
     if (storedValue !== undefined) return storedValue;
@@ -388,6 +441,31 @@ const IndicatorsPage = ({ data, userInfo }) => {
 
     await updateIndicator(indicator.id, {
       [EVIDENCE_URL_FIELD]: nextValue,
+    });
+  };
+
+  const getLogroValue = (indicator) => {
+    const storedValue = logroValues[String(indicator.id)];
+    if (storedValue !== undefined) return storedValue;
+    return String(indicator?.logro ?? "");
+  };
+
+  const handleLogroChange = (indicatorId) => (event) => {
+    const value = event.target.value;
+    setLogroValues((prev) => ({
+      ...prev,
+      [String(indicatorId)]: value,
+    }));
+  };
+
+  const handleLogroBlur = (indicator) => async () => {
+    const nextValue = getLogroValue(indicator).trim();
+    const currentValue = String(indicator?.logro ?? "").trim();
+
+    if (nextValue === currentValue) return;
+
+    await updateIndicator(indicator.id, {
+      logro: nextValue,
     });
   };
 
@@ -438,7 +516,35 @@ const IndicatorsPage = ({ data, userInfo }) => {
     setBusyId("create");
     setActionError("");
     try {
-      const indicatorResponse = await createSheetRow(SHEET_NAME, payload);
+      const indicatorPayload = { ...payload };
+      indicatorPayload.suma_facultad =
+        indicatorPayload.suma_facultad === true ||
+        String(indicatorPayload.suma_facultad).toLowerCase() === "true";
+      const shouldCreateRespondeA = Boolean(indicatorPayload.create_responde_a);
+      const respondeAName = String(
+        indicatorPayload.responde_a_nombre ?? "",
+      ).trim();
+
+      if (shouldCreateRespondeA) {
+        if (!respondeAName) {
+          throw new Error("Debes escribir el nombre de RESPONDE_A.");
+        }
+        const respondeAResponse = await createSheetRow("RESPONDE_A", {
+          nombre: respondeAName,
+        });
+        const respondeAId = getCreatedIndicatorId(respondeAResponse);
+        if (respondeAId) {
+          indicatorPayload.id_responde_a = respondeAId;
+        }
+      }
+
+      delete indicatorPayload.create_responde_a;
+      delete indicatorPayload.responde_a_nombre;
+
+      const indicatorResponse = await createSheetRow(
+        SHEET_NAME,
+        indicatorPayload,
+      );
       console.log("Create response:", indicatorResponse);
       const indicatorId = getCreatedIndicatorId(indicatorResponse);
       const metaPayload = buildMetaPayload(indicatorId, payload);
@@ -500,12 +606,17 @@ const IndicatorsPage = ({ data, userInfo }) => {
               {filteredRows.length} de {visibleRows.length} indicadores visibles
             </Typography>
           </Box>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => setCreateOpen(true)}
-          >
-            Crear indicador
+          {canEditAllIndicators && (
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => setCreateOpen(true)}
+            >
+              Crear indicador
+            </Button>
+          )}
+          <Button variant="outlined" onClick={clearFilters}>
+            Limpiar filtros
           </Button>
         </Box>
 
@@ -519,6 +630,22 @@ const IndicatorsPage = ({ data, userInfo }) => {
             >
               <MenuItem value="">Todas</MenuItem>
               {filterOptions.dependencias.map((item) => (
+                <MenuItem key={item.id} value={String(item.id)}>
+                  {toText(item.nombre)}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <FormControl size="small" fullWidth>
+            <InputLabel>Responde a</InputLabel>
+            <Select
+              value={filters.respondeA}
+              label="Responde a"
+              onChange={handleFilterChange("respondeA")}
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {filterOptions.respondeAs.map((item) => (
                 <MenuItem key={item.id} value={String(item.id)}>
                   {toText(item.nombre)}
                 </MenuItem>
@@ -663,8 +790,21 @@ const IndicatorsPage = ({ data, userInfo }) => {
               setExpandedId(expanded ? indicator.id : null)
             }
           >
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Box className="indicator-summary-grid">
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Box
+                className="indicator-summary-grid"
+                sx={{
+                  bgcolor: isIndicatorOwnedByUser(indicator)
+                    ? "grey.800"
+                    : "transparent",
+                  color: isIndicatorOwnedByUser(indicator)
+                    ? "common.white"
+                    : "inherit",
+                  borderRadius: 1,
+                  px: 1,
+                  py: 0.5,
+                }}
+              >
                 <Typography sx={{ fontWeight: 700 }}>
                   {toText(indicator.id)}
                 </Typography>
@@ -704,6 +844,15 @@ const IndicatorsPage = ({ data, userInfo }) => {
                   </Typography>
                 </Paper>
                 <Paper className="detail-item" elevation={0}>
+                  <Typography className="detail-label">Responsable</Typography>
+                  <Typography className="detail-value">
+                    {toText(
+                      indicator.responsableUsuario?.correo ??
+                        indicator.responsable,
+                    )}
+                  </Typography>
+                </Paper>
+                <Paper className="detail-item" elevation={0}>
                   <Typography className="detail-label">
                     Programa institucional
                   </Typography>
@@ -727,19 +876,30 @@ const IndicatorsPage = ({ data, userInfo }) => {
                 >
                   Ver detalles
                 </Button>
-                <Button
-                  variant="contained"
-                  onClick={() => setEditState({ open: true, indicator })}
-                >
-                  Editar
-                </Button>
-                <Button
-                  color="error"
-                  variant="outlined"
-                  onClick={() => removeIndicator(indicator)}
-                >
-                  Eliminar
-                </Button>
+                {canEditAllIndicators ? (
+                  <>
+                    <Button
+                      variant="contained"
+                      onClick={() => setEditState({ open: true, indicator })}
+                    >
+                      Editar
+                    </Button>
+                    <Button
+                      color="error"
+                      variant="outlined"
+                      onClick={() => removeIndicator(indicator)}
+                    >
+                      Eliminar
+                    </Button>
+                  </>
+                ) : canEditLogroOnly ? (
+                  <Button
+                    variant="contained"
+                    onClick={() => setEditState({ open: true, indicator })}
+                  >
+                    Editar logro
+                  </Button>
+                ) : null}
               </Box>
               <TableContainer
                 component={Paper}
@@ -788,21 +948,34 @@ const IndicatorsPage = ({ data, userInfo }) => {
                   alignItems: "start",
                 }}
               >
-                <Typography className="detail-label" sx={{ mb: 1 }}>
-                  URL documento evidencia
-                </Typography>
-                <Box />
-                <TextField
-                  fullWidth
-                  size="small"
-                  placeholder="URL del documento de evidencia"
-                  value={getEvidenceUrl(indicator)}
-                  onChange={handleEvidenceUrlChange(indicator.id)}
-                  onBlur={handleEvidenceUrlBlur(indicator)}
-                />
-                <Box />
-
-                <Box />
+                <Box sx={{ gridColumn: "1 / -1" }}>
+                  <Typography className="detail-label" sx={{ mb: 1 }}>
+                    URL documento evidencia
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    placeholder="URL del documento de evidencia"
+                    value={getEvidenceUrl(indicator)}
+                    onChange={handleEvidenceUrlChange(indicator.id)}
+                    onBlur={handleEvidenceUrlBlur(indicator)}
+                  />
+                </Box>
+                <Box sx={{ gridColumn: "1 / -1" }}>
+                  <Typography className="detail-label" sx={{ mb: 1 }}>
+                    Logro
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    multiline
+                    minRows={4}
+                    placeholder="Logro"
+                    value={getLogroValue(indicator)}
+                    onChange={handleLogroChange(indicator.id)}
+                    onBlur={handleLogroBlur(indicator)}
+                  />
+                </Box>
               </Box>
             </AccordionDetails>
           </Accordion>
@@ -828,14 +1001,16 @@ const IndicatorsPage = ({ data, userInfo }) => {
         loading={busyId === "create"}
         dependencias={dependencias}
         desafios={desafios}
-        estrategiasConvergentes={estrategiasConvergentes}
-        estrategiasFacultad={estrategiasFacultad}
-        programasInstitucionales={programasInstitucionales}
-        indicadoresResultado={indicadoresResultado}
-        periodos={periodos}
-        metas={metas}
-        onClose={() => setCreateOpen(false)}
-        onSubmit={createIndicator}
+      estrategiasConvergentes={estrategiasConvergentes}
+      estrategiasFacultad={estrategiasFacultad}
+      programasInstitucionales={programasInstitucionales}
+      indicadoresResultado={indicadoresResultado}
+      respondeAs={respondeAs}
+      usuarios={usuarios}
+      periodos={periodos}
+      metas={metas}
+      onClose={() => setCreateOpen(false)}
+      onSubmit={createIndicator}
       />
 
       <EditModal
@@ -844,15 +1019,18 @@ const IndicatorsPage = ({ data, userInfo }) => {
         indicator={editState.indicator}
         dependencias={dependencias}
         desafios={desafios}
-        estrategiasConvergentes={estrategiasConvergentes}
-        estrategiasFacultad={estrategiasFacultad}
-        programasInstitucionales={programasInstitucionales}
-        indicadoresResultado={indicadoresResultado}
-        metas={metas}
-        periodos={[]}
-        onClose={() => setEditState({ open: false, indicator: null })}
-        onSubmit={(payload) => updateIndicator(editState.indicator.id, payload)}
-      />
+      estrategiasConvergentes={estrategiasConvergentes}
+      estrategiasFacultad={estrategiasFacultad}
+      programasInstitucionales={programasInstitucionales}
+      indicadoresResultado={indicadoresResultado}
+      respondeAs={respondeAs}
+      usuarios={usuarios}
+      metas={metas}
+      periodos={[]}
+      mode={canEditLogroOnly ? "logro" : "full"}
+      onClose={() => setEditState({ open: false, indicator: null })}
+      onSubmit={(payload) => updateIndicator(editState.indicator.id, payload)}
+    />
 
       <ModalDetails
         open={detailsState.open}
@@ -861,11 +1039,13 @@ const IndicatorsPage = ({ data, userInfo }) => {
         desafios={desafios}
         estrategiasConvergentes={estrategiasConvergentes}
         estrategiasFacultad={estrategiasFacultad}
-        programasInstitucionales={programasInstitucionales}
-        indicadoresResultado={indicadoresResultado}
-        periodos={periodos}
-        onClose={() => setDetailsState({ open: false, indicator: null })}
-      />
+      programasInstitucionales={programasInstitucionales}
+      indicadoresResultado={indicadoresResultado}
+      respondeAs={respondeAs}
+      usuarios={usuarios}
+      periodos={periodos}
+      onClose={() => setDetailsState({ open: false, indicator: null })}
+    />
     </Box>
   );
 };

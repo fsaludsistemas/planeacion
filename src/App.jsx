@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Alert, Box, Container, Tab, Tabs, Typography } from "@mui/material";
+import Cookies from "js-cookie";
 import Header from "./components/Header";
 import LoadingIndicator from "./components/LoadingIndicator";
 import GoogleLogin from "./components/GoogleLogin";
 import IndicatorsPage from "./pages/IndicatorsPage";
+import Usuarios from "./pages/Usuarios";
 import Seguimientos from "./pages/Seguimientos";
 import { getData } from "./api/api";
-import Cookies from "js-cookie";
 import "./App.css";
 
 const App = () => {
@@ -29,6 +30,15 @@ const App = () => {
 
     return null;
   };
+
+  const userRole = useMemo(
+    () => String(userInfo?.rol || userInfo?.permiso || "").trim().toLowerCase(),
+    [userInfo],
+  );
+  const canManageUsers =
+    userRole === "administrador" ||
+    userRole === "sistemas" ||
+    String(userInfo?.id || "") === "0";
 
   useEffect(() => {
     const token = Cookies.get("token");
@@ -110,7 +120,14 @@ const App = () => {
       return <IndicatorsPage data={appData} userInfo={userInfo} />;
     }
 
-    if (currentTab === 1) {
+    if (canManageUsers && currentTab === 1) {
+      return <Usuarios data={appData} userInfo={userInfo} />;
+    }
+
+    const consolidationTab = canManageUsers ? 2 : 1;
+    const seguimientosTab = canManageUsers ? 3 : 2;
+
+    if (currentTab === consolidationTab) {
       return (
         <Box sx={{ padding: "20px 0" }}>
           <Typography variant="h6">Consolidado Ind.</Typography>
@@ -118,9 +135,12 @@ const App = () => {
         </Box>
       );
     }
-    if (currentTab === 2) {
+
+    if (currentTab === seguimientosTab) {
       return <Seguimientos data={appData} userInfo={userInfo} />;
     }
+
+    return null;
   };
 
   return (
@@ -139,6 +159,12 @@ const App = () => {
                   label="Indicadores"
                   sx={{ fontSize: "1rem", fontWeight: "bold" }}
                 />
+                {canManageUsers && (
+                  <Tab
+                    label="Gestión de Usuarios"
+                    sx={{ fontSize: "1rem", fontWeight: "bold" }}
+                  />
+                )}
                 <Tab
                   label="Consolidado Ind."
                   sx={{ fontSize: "1rem", fontWeight: "bold" }}

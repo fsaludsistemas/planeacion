@@ -1,6 +1,11 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   FormControl,
   InputLabel,
   MenuItem,
@@ -12,6 +17,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TextField,
   Typography,
 } from "@mui/material";
 import { PieChart } from "@mui/x-charts/PieChart";
@@ -30,6 +36,13 @@ const toNumber = (value) => {
     .trim();
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : null;
+};
+
+const limpiarPorcentaje = (dato) => {
+  if (typeof dato === "string") {
+    dato = dato.replace("%", "").trim();
+  }
+  return parseFloat(dato);
 };
 
 const formatPercent = (value) => {
@@ -60,6 +73,34 @@ const buildYearKeys = (metas, avances) => {
   return [...keys].sort((a, b) => Number(a) - Number(b));
 };
 
+const getHeaderDate = () =>
+  new Date().toLocaleDateString("es-CO", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+
+const getCurrentTime = () =>
+  new Date().toLocaleTimeString("es-CO", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+
+const isPrivilegedRole = (role) => {
+  const value = normalize(role);
+  return value === "administrador" || value === "sistemas" || value === "0";
+};
+
+const percentageClass = (value) => {
+  const n = limpiarPorcentaje(value);
+  if (n >= 90) return "lightgreen";
+  if (n >= 50) return "lightblue";
+  if (n >= 30) return "yellow";
+  if (n >= 0) return "salmon";
+  return "transparent";
+};
+
 const Seguimientos = ({ data, userInfo }) => {
   const sessionUser = useMemo(() => {
     if (userInfo) return userInfo;
@@ -71,30 +112,57 @@ const Seguimientos = ({ data, userInfo }) => {
     }
   }, [userInfo]);
 
+  const userRole = normalize(sessionUser?.rol || sessionUser?.permiso);
   const userDependencyId = String(sessionUser?.id_dependencia || "").trim();
-  const isSystemUser =
-    userDependencyId === "0" || normalize(sessionUser?.permiso) === "sistemas";
+  const canSeeAll = isPrivilegedRole(userRole);
+
+  const [selectedDependency, setSelectedDependency] = useState("");
+  const [selectedDesafio, setSelectedDesafio] = useState("");
+  const [selectedConvergente, setSelectedConvergente] = useState("");
+  const [selectedFacultad, setSelectedFacultad] = useState("");
+  const [selectedPrograma, setSelectedPrograma] = useState("");
+  const [selectedResultado, setSelectedResultado] = useState("");
+  const [selectedYear, setSelectedYear] = useState(
+    String(new Date().getFullYear()),
+  );
+  const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
+  const [logroFilter, setLogroFilter] = useState("");
 
   const desafios = useMemo(() => sortById(getSheet(data, "DESAFIOS")), [data]);
   const dependencias = useMemo(
     () => sortById(getSheet(data, "DEPENDENCIA", "DEPENDENCIAS")),
     [data],
   );
-
+  const users = useMemo(() => sortById(getSheet(data, "USUARIOS")), [data]);
   const indicators = useMemo(
     () => sortById(getSheet(data, "INDICADORES_PRODUCTO")),
     [data],
   );
   const metas = useMemo(() => sortById(getSheet(data, "METAS")), [data]);
   const avances = useMemo(() => sortById(getSheet(data, "AVANCES")), [data]);
+  const estrategiasConvergentes = useMemo(
+    () =>
+      sortById(
+        getSheet(data, "ESTRATEGIA_CONVERGENTE", "ESTRATEGIA_CONVERGENTE"),
+      ),
+    [data],
+  );
+  const estrategiasFacultad = useMemo(
+    () => sortById(getSheet(data, "ESTRATEGIA_FACULTAD")),
+    [data],
+  );
+  const programasInstitucionales = useMemo(
+    () => sortById(getSheet(data, "PROGRAMAS_INST")),
+    [data],
+  );
+  const indicadoresResultado = useMemo(
+    () => sortById(getSheet(data, "INDICADORES_RESULTADO")),
+    [data],
+  );
 
   const desafioById = useMemo(
     () => new Map(desafios.map((item) => [String(item.id), item])),
     [desafios],
-  );
-  const dependenciaById = useMemo(
-    () => new Map(dependencias.map((item) => [String(item.id), item])),
-    [dependencias],
   );
   const metaByIndicatorId = useMemo(
     () =>
@@ -105,167 +173,185 @@ const Seguimientos = ({ data, userInfo }) => {
     () => new Map(avances.map((item) => [String(item.id_indicador), item])),
     [avances],
   );
-
   const availableYears = useMemo(
     () => buildYearKeys(metas, avances),
     [metas, avances],
   );
 
-  const [selectedDependency, setSelectedDependency] = useState("");
-
-  function limpiarPorcentaje(dato) {
-    // Si es un string, quita el símbolo % y los espacios vacíos
-    if (typeof dato === "string") {
-      dato = dato.replace("%", "").trim();
-    }
-    // Convierte a número flotante (ej: "15.5" pasa a 15.5)
-    return parseFloat(dato);
-  }
-
-  const contadorIndicadores = (avancesValue) => {
-    const porcentaje = limpiarPorcentaje(avancesValue);
-    let bajo = 0;
-    let medio = 0;
-    let alto = 0;
-    let superior = 0;
-    if (porcentaje >= 90) {
-      superior++;
-    }
-    if (porcentaje >= 50 && porcentaje < 89) {
-      alto++;
-    }
-    if (porcentaje >= 30 && porcentaje < 49) {
-      medio++;
-    }
-    if (porcentaje >= 0 && porcentaje < 29) {
-      bajo++;
-    }
-    console.log({ bajo, medio, alto, superior });
-    return { bajo, medio, alto, superior };
-  };
-
-  function calcularCumplimientoTotal(arregloMetas) {
-    // 1. Validar que el arreglo no esté vacío para evitar división por cero
-    if (!arregloMetas || arregloMetas.length === 0) return "0%";
-
-    // 2. Sumar los porcentajes procesados
-    const sumaPorcentajes = arregloMetas.reduce((acumulado, meta) => {
-      // Si viene como string (ej: "57,6%"), cambiamos la coma por punto y quitamos el %
-      let valorLimpio = String(meta).replace("%", "").replace(",", ".").trim();
-
-      // Convertimos a número decimal
-      let numero = parseFloat(valorLimpio);
-
-      // Si el dato no es válido, sumamos 0
-      return acumulado + (isNaN(numero) ? 0 : numero);
-    }, 0);
-
-    // 3. Calcular el promedio (Suma total / Cantidad de metas)
-    const promedio = sumaPorcentajes / arregloMetas.length;
-
-    // 4. Retornar el resultado formateado (con un decimal y el símbolo %)
-    return `${promedio.toFixed(1).replace(".", ",")}%`;
-  }
-
-  const currentYear = String(new Date().getFullYear());
-  const initialYear = availableYears.includes(currentYear)
-    ? currentYear
-    : availableYears[0] || currentYear;
-  const [selectedYear, setSelectedYear] = useState(initialYear);
-
   useEffect(() => {
     if (!availableYears.length) return;
     if (!availableYears.includes(selectedYear)) {
-      setSelectedYear(
-        availableYears.includes(currentYear) ? currentYear : availableYears[0],
-      );
+      setSelectedYear(availableYears[0]);
     }
-  }, [availableYears, selectedYear, currentYear]);
+  }, [availableYears, selectedYear]);
+
+  useEffect(() => {
+    if (!canSeeAll && userDependencyId) {
+      setSelectedDependency(userDependencyId);
+    }
+  }, [canSeeAll, userDependencyId]);
+
+  const filterableIndicators = useMemo(() => {
+    return indicators.filter((indicator) => {
+      if (!canSeeAll && userDependencyId) {
+        if (String(indicator.id_dependencia || "") !== userDependencyId) {
+          return false;
+        }
+      }
+      if (
+        selectedDependency &&
+        String(indicator.id_dependencia || "") !== selectedDependency
+      ) {
+        return false;
+      }
+      if (
+        selectedDesafio &&
+        String(indicator.id_desafio || "") !== selectedDesafio
+      ) {
+        return false;
+      }
+      if (
+        selectedConvergente &&
+        String(indicator.id_estrategia_convergente || "") !==
+          selectedConvergente
+      ) {
+        return false;
+      }
+      if (
+        selectedFacultad &&
+        String(indicator.id_estrategia_facultad || "") !== selectedFacultad
+      ) {
+        return false;
+      }
+      if (
+        selectedPrograma &&
+        String(indicator.id_programa_inst || "") !== selectedPrograma
+      ) {
+        return false;
+      }
+      if (
+        selectedResultado &&
+        String(indicator.id_indicador_resultado || "") !== selectedResultado
+      ) {
+        return false;
+      }
+      if (
+        logroFilter &&
+        !normalize(indicator.logro).includes(normalize(logroFilter))
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [
+    indicators,
+    canSeeAll,
+    userDependencyId,
+    selectedDependency,
+    selectedDesafio,
+    selectedConvergente,
+    selectedFacultad,
+    selectedPrograma,
+    selectedResultado,
+    logroFilter,
+  ]);
 
   const rowsByDesafio = useMemo(() => {
     const grouped = new Map();
-
-    indicators.forEach((indicator) => {
-      if (
-        selectedDependency &&
-        String(indicator.id_dependencia ?? "") !== selectedDependency
-      ) {
-        return;
-      }
-
-      const challengeId = String(indicator.id_desafio ?? "");
-      const desafio = desafioById.get(challengeId);
+    filterableIndicators.forEach((indicator) => {
+      const desafio = desafioById.get(String(indicator.id_desafio || ""));
       if (!desafio) return;
-
       const meta = metaByIndicatorId.get(String(indicator.id));
       const avance = avanceByIndicatorId.get(String(indicator.id));
       const metaValue = meta ? meta[`meta_${selectedYear}`] : null;
       const avanceValue = avance ? avance[`avance_${selectedYear}`] : null;
       if (metaValue == null && avanceValue == null) return;
-
-      const existing = grouped.get(challengeId) || {
+      const existing = grouped.get(String(desafio.id)) || {
         desafio,
         indicators: [],
       };
-
       existing.indicators.push({
         ...indicator,
         metaValue,
         avanceValue,
       });
-      grouped.set(challengeId, existing);
+      grouped.set(String(desafio.id), existing);
     });
-
-    return [...grouped.values()].filter((group) => group.indicators.length > 0);
+    return [...grouped.values()];
   }, [
-    indicators,
+    filterableIndicators,
     desafioById,
     metaByIndicatorId,
     avanceByIndicatorId,
     selectedYear,
-    selectedDependency,
   ]);
 
   const dependencyOptions = useMemo(() => {
-    const counts = new Map();
+    const ids = new Set(
+      filterableIndicators.map((item) => String(item.id_dependencia || "")),
+    );
+    return dependencias.filter((item) => ids.has(String(item.id)));
+  }, [dependencias, filterableIndicators]);
 
-    indicators.forEach((indicator) => {
-      const dependencyId = String(indicator.id_dependencia ?? "");
-      if (!dependencyId) return;
+  const convergenteOptions = useMemo(() => {
+    const ids = selectedDesafio
+      ? [selectedDesafio]
+      : [
+          ...new Set(
+            filterableIndicators.map((item) => String(item.id_desafio || "")),
+          ).values(),
+        ];
+    return estrategiasConvergentes.filter((item) =>
+      ids.includes(String(item.id_desafio || "")),
+    );
+  }, [estrategiasConvergentes, filterableIndicators, selectedDesafio]);
 
-      const meta = metaByIndicatorId.get(String(indicator.id));
-      const avance = avanceByIndicatorId.get(String(indicator.id));
-      const metaValue = meta ? meta[`meta_${selectedYear}`] : null;
-      const avanceValue = avance ? avance[`avance_${selectedYear}`] : null;
-      if (metaValue == null && avanceValue == null) return;
+  const facultadOptions = useMemo(() => {
+    const ids = selectedConvergente
+      ? [selectedConvergente]
+      : [
+          ...new Set(
+            filterableIndicators.map((item) =>
+              String(item.id_estrategia_convergente || ""),
+            ),
+          ).values(),
+        ];
+    return estrategiasFacultad.filter((item) =>
+      ids.includes(
+        String(item.id_estrategia_convergente || item.id_convergente || ""),
+      ),
+    );
+  }, [estrategiasFacultad, filterableIndicators, selectedConvergente]);
 
-      counts.set(dependencyId, (counts.get(dependencyId) || 0) + 1);
-    });
+  const programaOptions = useMemo(() => {
+    const ids = selectedFacultad
+      ? [selectedFacultad]
+      : [
+          ...new Set(
+            filterableIndicators.map((item) =>
+              String(item.id_estrategia_facultad || ""),
+            ),
+          ).values(),
+        ];
+    return programasInstitucionales.filter((item) =>
+      ids.includes(String(item.id_estrategia_facultad || "")),
+    );
+  }, [programasInstitucionales, filterableIndicators, selectedFacultad]);
 
-    return dependencias.filter((item) => counts.has(String(item.id)));
-  }, [
-    dependencias,
-    indicators,
-    metaByIndicatorId,
-    avanceByIndicatorId,
-    selectedYear,
-  ]);
-
-  const totales = rowsByDesafio.reduce(
-    (acumulador, group) => {
-      group.indicators.forEach((indicator) => {
-        const conteo = contadorIndicadores(indicator.avanceValue);
-
-        // Sumamos el valor actual al acumulador (aseguramos que sea número)
-        acumulador.superior += conteo.superior || 0;
-        acumulador.alto += conteo.alto || 0;
-        acumulador.medio += conteo.medio || 0;
-        acumulador.bajo += conteo.bajo || 0;
-      });
-      return acumulador;
-    },
-    { superior: 0, alto: 0, medio: 0, bajo: 0 }, // Valores iniciales en 0
-  );
+  const resultadoOptions = useMemo(() => {
+    const ids = selectedPrograma
+      ? [selectedPrograma]
+      : [
+          ...new Set(
+            filterableIndicators.map((item) =>
+              String(item.id_programa_inst || ""),
+            ),
+          ).values(),
+        ];
+    return indicadoresResultado.filter((item) =>
+      ids.includes(String(item.id_programa_inst || "")),
+    );
+  }, [indicadoresResultado, filterableIndicators, selectedPrograma]);
 
   const totals = useMemo(() => {
     let totalIndicadores = 0;
@@ -299,6 +385,115 @@ const Seguimientos = ({ data, userInfo }) => {
     [rowsByDesafio],
   );
 
+  const indicatorColorCounts = useMemo(() => {
+    return filterableIndicators.reduce(
+      (acc, indicator) => {
+        const value = limpiarPorcentaje(
+          avanceByIndicatorId.get(String(indicator.id))?.[
+            `avance_${selectedYear}`
+          ],
+        );
+        if (value >= 90) acc.superior += 1;
+        else if (value >= 50) acc.alto += 1;
+        else if (value >= 30) acc.medio += 1;
+        else if (value >= 0) acc.bajo += 1;
+        return acc;
+      },
+      { superior: 0, alto: 0, medio: 0, bajo: 0 },
+    );
+  }, [filterableIndicators, avanceByIndicatorId, selectedYear]);
+
+  const exportToPdf = () => {
+    const printWindow = window.open("", "_blank", "width=1200,height=800");
+    if (!printWindow) return;
+
+    const headerDate = getHeaderDate();
+    const currentTime = getCurrentTime();
+    const filtersText = [
+      `Año: ${selectedYear}`,
+      `Dependencia: ${selectedDependency || "Todas"}`,
+      `Desafío: ${selectedDesafio || "Todos"}`,
+      `Estrategia convergente: ${selectedConvergente || "Todas"}`,
+      `Estrategia facultad: ${selectedFacultad || "Todas"}`,
+      `Programa institucional: ${selectedPrograma || "Todos"}`,
+      `Indicador resultado: ${selectedResultado || "Todos"}`,
+      `Logro: ${logroFilter || "Todos"}`,
+    ];
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Seguimientos</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 24px; color: #111; }
+            h1, h2, p { margin: 0 0 8px; }
+            .meta { margin-bottom: 16px; font-size: 12px; color: #444; }
+            .filters { margin-bottom: 16px; font-size: 12px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+            th, td { border: 1px solid #ccc; padding: 6px; font-size: 11px; }
+            th { background: #f1f1f1; }
+            .c-green { background: lightgreen; }
+            .c-blue { background: lightblue; }
+            .c-yellow { background: yellow; }
+            .c-salmon { background: salmon; }
+          </style>
+        </head>
+        <body>
+          <h1>Seguimientos</h1>
+          <div class="meta">Última actualización: ${headerDate} | Hora de exportación: ${currentTime}</div>
+          <div class="filters">
+            <strong>Filtros activos</strong><br/>
+            ${filtersText.map((item) => `${item}<br/>`).join("")}
+          </div>
+          ${rowsByDesafio
+            .map(
+              (group) => `
+                <h2>${toText(group.desafio.titulo)}</h2>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Indicador</th>
+                      <th>Meta</th>
+                      <th>Avance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${group.indicators
+                      .map((indicator) => {
+                        const bg = percentageClass(indicator.avanceValue);
+                        const cls =
+                          bg === "lightgreen"
+                            ? "c-green"
+                            : bg === "lightblue"
+                              ? "c-blue"
+                              : bg === "yellow"
+                                ? "c-yellow"
+                                : bg === "salmon"
+                                  ? "c-salmon"
+                                  : "";
+                        return `
+                          <tr>
+                            <td>${toText(indicator.nombre)}</td>
+                            <td>${formatPercent(indicator.metaValue)}</td>
+                            <td class="${cls}">${toText(indicator.avanceValue)}</td>
+                          </tr>
+                        `;
+                      })
+                      .join("")}
+                  </tbody>
+                </table>
+              `,
+            )
+            .join("")}
+          <script>
+            window.onload = function () { window.print(); window.close(); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   if (!data) {
     return (
       <Paper className="seguimientos-empty" elevation={0}>
@@ -310,34 +505,31 @@ const Seguimientos = ({ data, userInfo }) => {
   return (
     <Box className="seguimientos-page">
       <Paper className="seguimientos-panel" elevation={1}>
-        <Box className="seguimientos-header">
+        <Box className="seguimientos-header" sx={{ flexWrap: "wrap", gap: 2 }}>
           <Box>
             <Typography variant="h5" sx={{ fontWeight: 800 }}>
               Seguimientos
             </Typography>
             <Typography variant="body2" sx={{ color: "text.secondary" }}>
-              {rowsByDesafio.reduce(
-                (sum, group) => sum + group.indicators.length,
-                0,
-              )}{" "}
-              indicadores con seguimiento
+              {filterableIndicators.length} indicadores con seguimiento
             </Typography>
           </Box>
 
-          <FormControl size="small" sx={{ minWidth: 160 }}>
+          <FormControl size="small" sx={{ minWidth: 140 }}>
             <InputLabel>Año</InputLabel>
             <Select
               value={selectedYear}
               label="Año"
-              onChange={(event) => setSelectedYear(event.target.value)}
+              onChange={(e) => setSelectedYear(e.target.value)}
             >
-              {(availableYears.length ? availableYears : [currentYear]).map(
-                (year) => (
-                  <MenuItem key={year} value={year}>
-                    {year}
-                  </MenuItem>
-                ),
-              )}
+              {(availableYears.length
+                ? availableYears
+                : [String(new Date().getFullYear())]
+              ).map((year) => (
+                <MenuItem key={year} value={year}>
+                  {year}
+                </MenuItem>
+              ))}
             </Select>
           </FormControl>
 
@@ -346,7 +538,8 @@ const Seguimientos = ({ data, userInfo }) => {
             <Select
               value={selectedDependency}
               label="Dependencia"
-              onChange={(event) => setSelectedDependency(event.target.value)}
+              onChange={(e) => setSelectedDependency(e.target.value)}
+              disabled={!canSeeAll}
             >
               <MenuItem value="">Todas</MenuItem>
               {dependencyOptions.map((item) => (
@@ -356,19 +549,132 @@ const Seguimientos = ({ data, userInfo }) => {
               ))}
             </Select>
           </FormControl>
+
+          <Button
+            variant="outlined"
+            onClick={() => setAdvancedFiltersOpen(true)}
+          >
+            Ver más filtros
+          </Button>
+          <Button variant="contained" onClick={exportToPdf}>
+            Exportar a pdf
+          </Button>
         </Box>
       </Paper>
+
+      <Dialog
+        open={advancedFiltersOpen}
+        onClose={() => setAdvancedFiltersOpen(false)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>Más filtros</DialogTitle>
+        <DialogContent dividers>
+          <Box
+            sx={{
+              display: "grid",
+              gap: 2,
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+            }}
+          >
+            <FormControl size="small" fullWidth>
+              <InputLabel>Desafío</InputLabel>
+              <Select
+                value={selectedDesafio}
+                label="Desafío"
+                onChange={(e) => setSelectedDesafio(e.target.value)}
+              >
+                <MenuItem value="">Todos</MenuItem>
+                {desafios.map((item) => (
+                  <MenuItem key={item.id} value={String(item.id)}>
+                    {toText(item.titulo)}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" fullWidth>
+              <InputLabel>Estrategia convergente</InputLabel>
+              <Select
+                value={selectedConvergente}
+                label="Estrategia convergente"
+                onChange={(e) => setSelectedConvergente(e.target.value)}
+              >
+                <MenuItem value="">Todas</MenuItem>
+                {convergenteOptions.map((item) => (
+                  <MenuItem key={item.id} value={String(item.id)}>
+                    {toText(item.titulo)}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" fullWidth>
+              <InputLabel>Estrategia facultad</InputLabel>
+              <Select
+                value={selectedFacultad}
+                label="Estrategia facultad"
+                onChange={(e) => setSelectedFacultad(e.target.value)}
+              >
+                <MenuItem value="">Todas</MenuItem>
+                {facultadOptions.map((item) => (
+                  <MenuItem key={item.id} value={String(item.id)}>
+                    {toText(item.titulo)}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" fullWidth>
+              <InputLabel>Programa institucional</InputLabel>
+              <Select
+                value={selectedPrograma}
+                label="Programa institucional"
+                onChange={(e) => setSelectedPrograma(e.target.value)}
+              >
+                <MenuItem value="">Todos</MenuItem>
+                {programaOptions.map((item) => (
+                  <MenuItem key={item.id} value={String(item.id)}>
+                    {toText(item.titulo)}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" fullWidth>
+              <InputLabel>Indicador resultado</InputLabel>
+              <Select
+                value={selectedResultado}
+                label="Indicador resultado"
+                onChange={(e) => setSelectedResultado(e.target.value)}
+              >
+                <MenuItem value="">Todos</MenuItem>
+                {resultadoOptions.map((item) => (
+                  <MenuItem key={item.id} value={String(item.id)}>
+                    {toText(item.nombre)}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
+              fullWidth
+              size="small"
+              label="Logro"
+              value={logroFilter}
+              onChange={(e) => setLogroFilter(e.target.value)}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAdvancedFiltersOpen(false)}>Cerrar</Button>
+        </DialogActions>
+      </Dialog>
 
       <Box className="seguimientos-layout">
         <TableContainer component={Paper} className="seguimientos-table-card">
           <Table size="small">
             <TableBody>
               <TableRow>
-                <TableCell sx={{ fontWeight: 800 }}>Desafio</TableCell>
+                <TableCell sx={{ fontWeight: 800 }}>Desafío</TableCell>
                 <TableCell sx={{ fontWeight: 800 }}>Nombre Indicador</TableCell>
                 <TableCell sx={{ fontWeight: 800 }}>Meta planeada</TableCell>
                 <TableCell sx={{ fontWeight: 800 }}>Meta ejecutada</TableCell>
-                <TableCell sx={{ fontWeight: 800 }}>Porcentaje Real</TableCell>
               </TableRow>
               {rowsByDesafio.map((group) =>
                 group.indicators.map((indicator, index) => (
@@ -383,29 +689,13 @@ const Seguimientos = ({ data, userInfo }) => {
                     )}
                     <TableCell>{toText(indicator.nombre)}</TableCell>
                     <TableCell>{formatPercent(indicator.metaValue)}</TableCell>
-                    <TableCell>{indicator.avanceValue}</TableCell>
-                    {limpiarPorcentaje(indicator.avanceValue) >= 90 ? (
-                      <TableCell sx={{ backgroundColor: "lightgreen" }}>
-                        {indicator.avanceValue}
-                      </TableCell>
-                    ) : limpiarPorcentaje(indicator.avanceValue) >= 50 &&
-                      limpiarPorcentaje(indicator.avanceValue) < 90 ? (
-                      <TableCell sx={{ backgroundColor: "lightblue" }}>
-                        {indicator.avanceValue}
-                      </TableCell>
-                    ) : limpiarPorcentaje(indicator.avanceValue) >= 30 &&
-                      limpiarPorcentaje(indicator.avanceValue) < 50 ? (
-                      <TableCell sx={{ backgroundColor: "yellow" }}>
-                        {indicator.avanceValue}
-                      </TableCell>
-                    ) : limpiarPorcentaje(indicator.avanceValue) >= 0 &&
-                      limpiarPorcentaje(indicator.avanceValue) < 30 ? (
-                      <TableCell sx={{ backgroundColor: "salmon" }}>
-                        {indicator.avanceValue}
-                      </TableCell>
-                    ) : (
-                      <TableCell>{indicator.avanceValue}</TableCell>
-                    )}
+                    <TableCell
+                      sx={{
+                        backgroundColor: percentageClass(indicator.avanceValue),
+                      }}
+                    >
+                      {indicator.avanceValue}
+                    </TableCell>
                   </TableRow>
                 )),
               )}
@@ -413,7 +703,6 @@ const Seguimientos = ({ data, userInfo }) => {
                 <TableCell colSpan={3} sx={{ fontWeight: 800 }}>
                   Total porcentaje ejecutado
                 </TableCell>
-                <TableCell sx={{ fontWeight: 800 }}></TableCell>
                 <TableCell sx={{ fontWeight: 800 }}>
                   {`${totals.promedio.toFixed(1).replace(".", ",")}%`}
                 </TableCell>
@@ -422,7 +711,6 @@ const Seguimientos = ({ data, userInfo }) => {
                 <TableCell colSpan={3} sx={{ fontWeight: 800 }}>
                   Pendiente por ejecutar
                 </TableCell>
-                <TableCell sx={{ fontWeight: 800 }}></TableCell>
                 <TableCell sx={{ fontWeight: 800 }}>
                   {`${totals.pending.toFixed(1).replace(".", ",")}%`}
                 </TableCell>
@@ -446,12 +734,7 @@ const Seguimientos = ({ data, userInfo }) => {
               <TableBody>
                 <TableRow>
                   <TableCell>Total indicadores</TableCell>
-                  <TableCell>
-                    {rowsByDesafio.reduce(
-                      (sum, group) => sum + group.indicators.length,
-                      0,
-                    )}
-                  </TableCell>
+                  <TableCell>{filterableIndicators.length}</TableCell>
                 </TableRow>
                 {challengeCounts.map((item) => (
                   <TableRow key={item.desafio.id}>
@@ -489,67 +772,53 @@ const Seguimientos = ({ data, userInfo }) => {
                   padding: -10, // Aumenta este número para alejar los labels del círculo
                 },
               }}
-            ></PieChart>
+            />
           </Box>
-          <Box>
+          <Box sx={{ mt: 2 }}>
             <Typography variant="h6" sx={{ fontWeight: 800, mb: 1 }}>
               Contador de indicadores y significado de colores
             </Typography>
             <TableContainer>
               <Table size="small">
                 <TableBody>
-                  {/* FILA 1: SUPERIOR */}
                   <TableRow>
                     <TableCell
-                      sx={{
-                        fontWeight: 800,
-                        backgroundColor: "#f5f5f5",
-                      }}
+                      sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}
                     >
                       Mayores de 90%
                     </TableCell>
-
                     <TableCell sx={{ backgroundColor: "lightgreen" }}>
-                      {totales.superior}
+                      {indicatorColorCounts.superior}
                     </TableCell>
                   </TableRow>
-
-                  {/* FILA 2: ALTO */}
                   <TableRow>
                     <TableCell
                       sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}
                     >
                       Entre 50% y 89%
                     </TableCell>
-
                     <TableCell sx={{ backgroundColor: "lightblue" }}>
-                      {totales.alto}
+                      {indicatorColorCounts.alto}
                     </TableCell>
                   </TableRow>
-
-                  {/* FILA 3: MEDIO */}
                   <TableRow>
                     <TableCell
                       sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}
                     >
                       Entre 30% y 49%
                     </TableCell>
-
                     <TableCell sx={{ backgroundColor: "yellow" }}>
-                      {totales.medio}
+                      {indicatorColorCounts.medio}
                     </TableCell>
                   </TableRow>
-
-                  {/* FILA 4: BAJO */}
                   <TableRow>
                     <TableCell
                       sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}
                     >
                       Entre 0% y 29%
                     </TableCell>
-
                     <TableCell sx={{ backgroundColor: "salmon" }}>
-                      {totales.bajo}
+                      {indicatorColorCounts.bajo}
                     </TableCell>
                   </TableRow>
                 </TableBody>
@@ -562,8 +831,8 @@ const Seguimientos = ({ data, userInfo }) => {
       {!rowsByDesafio.length && (
         <Paper className="seguimientos-empty" elevation={0}>
           <Typography>
-            No se encontraron indicadores con seguimiento para el año
-            seleccionado.
+            No se encontraron indicadores con seguimiento para los filtros
+            seleccionados.
           </Typography>
         </Paper>
       )}
