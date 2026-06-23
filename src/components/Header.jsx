@@ -22,6 +22,25 @@ const HeaderContainer = styled("div")(({ theme }) => ({
     height: "auto",
   },
 }));
+const lastUpdateDate = new Date().toLocaleDateString("es-CO", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+});
+const LastUpdate = styled("div")(({ theme }) => ({
+  fontSize: "12px",
+  fontWeight: 400,
+  color: "#8A8A8A",
+  fontFamily: "Helvetica, sans-serif",
+  marginTop: "2px",
+  [theme.breakpoints.down("md")]: {
+    fontSize: "10px",
+  },
+  [theme.breakpoints.down("sm")]: {
+    textAlign: "center",
+    fontSize: "10px",
+  },
+}));
 
 const TitleContainer = styled("div")(({ theme }) => ({
   position: "absolute",
@@ -52,13 +71,13 @@ const Title = styled("div")(({ theme }) => ({
 
 const Subtitle = styled("div")(({ theme }) => ({
   fontWeight: 400,
-  fontSize: "20px",
+  fontSize: "18px",
   color: "#423b3b",
   fontFamily: "Helvetica, sans-serif",
   [theme.breakpoints.down("sm")]: {
     fontSize: "18px",
     textAlign: "center",
-    margin: "5px 0",
+    margin: "4px 0",
   },
 }));
 
@@ -84,7 +103,11 @@ const Header = ({ userInfo, onLogout }) => {
   return (
     <HeaderContainer role="navegación" aria-label="Navegación Principal">
       <Logo>
-        <Link to="/" alt="Logo Universidad del Valle" aria-label="Homepage de Sistema Siac">
+        <Link
+          to="/"
+          alt="Logo Universidad del Valle"
+          aria-label="Homepage de Sistema Siac"
+        >
           <img src={logo} loading="lazy" alt="Logo Universidad del Valle" />
         </Link>
       </Logo>
@@ -93,6 +116,7 @@ const Header = ({ userInfo, onLogout }) => {
         {userInfo && (
           <Subtitle>{`${userInfo.name} - ${userInfo.rol}`}</Subtitle>
         )}
+        <LastUpdate>Última actualización: {lastUpdateDate}</LastUpdate>
       </TitleContainer>
       <ActionContainer>
         <Button
@@ -102,7 +126,7 @@ const Header = ({ userInfo, onLogout }) => {
             backgroundColor: "#c62828",
             color: "#ffffff",
             fontWeight: 700,
-            '&:hover': {
+            "&:hover": {
               backgroundColor: "#b71c1c",
             },
           }}

@@ -11,6 +11,10 @@ import {
 } from "@mui/material";
 
 const toText = (value) => String(value ?? "").trim() || "No disponible";
+const toBooleanText = (value) =>
+  value === true || String(value).toLowerCase() === "true" || value === 1
+    ? "Sí"
+    : "No";
 
 const DetailItem = ({ label, value }) => (
   <Paper variant="outlined" sx={{ p: 1.5, height: "100%" }}>
@@ -30,15 +34,20 @@ const ModalDetails = ({
   open,
   indicator,
   dependencias,
+  respondeAs,
   desafios,
   estrategiasConvergentes,
   estrategiasFacultad,
   programasInstitucionales,
   indicadoresResultado,
+  usuarios,
   periodos,
   onClose,
 }) => {
   if (!indicator) return null;
+  const responsableCorreo = usuarios?.find(
+    (item) => String(item.id) === String(indicator.responsable),
+  )?.correo;
   console.log({ indicator });
   console.log({ periodos });
   return (
@@ -62,6 +71,16 @@ const ModalDetails = ({
                 dependencias.find(
                   (item) =>
                     String(item.id) === String(indicator.id_dependencia),
+                )?.nombre
+              }
+            />
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <DetailItem
+              label="Responde a"
+              value={
+                respondeAs.find(
+                  (item) => String(item.id) === String(indicator.id_responde_a),
                 )?.nombre
               }
             />
@@ -121,6 +140,21 @@ const ModalDetails = ({
                     String(indicator.id_indicador_resultado),
                 )?.nombre
               }
+            />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <DetailItem label="Logro" value={indicator.logro} />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <DetailItem
+              label="Responsable"
+              value={responsableCorreo ?? indicator.responsable}
+            />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <DetailItem
+              label="Suma facultad"
+              value={toBooleanText(indicator.suma_facultad)}
             />
           </Grid>
           <Grid item xs={12} md={6}>

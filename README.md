@@ -131,6 +131,10 @@ SHEET_COLUMNS = {
     id_programa_inst: 1,
     nombre: 2,
   },
+  RESPONDE_A: {
+    id: 0,
+    nombre: 1,
+  },
   INDICADORES_PRODUCTO: {
     id: 0,
     id_dependencia: 1,
@@ -142,6 +146,10 @@ SHEET_COLUMNS = {
     id_periodo: 7,
     objetivo_escuela: 8,
     nombre: 9,
+    id_responde_a: 10,
+    logro: 11,
+    responsable: 12,
+    suma_facultad: 13,
   },
   METAS: {
     id: 0,
