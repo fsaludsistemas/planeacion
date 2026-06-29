@@ -2,14 +2,13 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   FormControl,
+  FormControlLabel,
   InputLabel,
   MenuItem,
   Paper,
+  Radio,
+  RadioGroup,
   Select,
   Table,
   TableBody,
@@ -22,6 +21,8 @@ import {
 } from "@mui/material";
 import { PieChart } from "@mui/x-charts/PieChart";
 import "../styles/seguimientos.css";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 const toText = (value) => String(value ?? "").trim() || "No disponible";
 const normalize = (value) =>
@@ -92,6 +93,22 @@ const isPrivilegedRole = (role) => {
   return value === "administrador" || value === "sistemas" || value === "0";
 };
 
+const matchesRespondeAFilter = (idRespondeA, filterValue, respondeAById) => {
+  if (!filterValue) return true;
+  const item = respondeAById.get(String(idRespondeA));
+  return normalize(item?.nombre) === normalize(filterValue);
+};
+
+const matchesTipoDependenciaFilter = (
+  idTipoDependencia,
+  filterValue,
+  tipoDependenciaById,
+) => {
+  if (!filterValue) return true;
+  const item = tipoDependenciaById.get(String(idTipoDependencia));
+  return normalize(item?.tipo) === normalize(filterValue);
+};
+
 const percentageClass = (value) => {
   const n = limpiarPorcentaje(value);
   if (n >= 90) return "lightgreen";
@@ -117,7 +134,9 @@ const Seguimientos = ({ data, userInfo }) => {
   const canSeeAll = isPrivilegedRole(userRole);
 
   const [selectedDependency, setSelectedDependency] = useState("");
+  const [selectedTipoDependencia, setSelectedTipoDependencia] = useState("");
   const [selectedDesafio, setSelectedDesafio] = useState("");
+  const [selectedRespondeA, setSelectedRespondeA] = useState("");
   const [selectedConvergente, setSelectedConvergente] = useState("");
   const [selectedFacultad, setSelectedFacultad] = useState("");
   const [selectedPrograma, setSelectedPrograma] = useState("");
@@ -126,11 +145,18 @@ const Seguimientos = ({ data, userInfo }) => {
     String(new Date().getFullYear()),
   );
   const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
-  const [logroFilter, setLogroFilter] = useState("");
 
   const desafios = useMemo(() => sortById(getSheet(data, "DESAFIOS")), [data]);
   const dependencias = useMemo(
     () => sortById(getSheet(data, "DEPENDENCIA", "DEPENDENCIAS")),
+    [data],
+  );
+  const tipoDependenciaById = useMemo(
+    () => new Map(dependencias.map((item) => [String(item.id), item])),
+    [dependencias],
+  );
+  const respondeAs = useMemo(
+    () => sortById(getSheet(data, "RESPONDE_A")),
     [data],
   );
   const users = useMemo(() => sortById(getSheet(data, "USUARIOS")), [data]);
@@ -163,6 +189,10 @@ const Seguimientos = ({ data, userInfo }) => {
   const desafioById = useMemo(
     () => new Map(desafios.map((item) => [String(item.id), item])),
     [desafios],
+  );
+  const respondeAById = useMemo(
+    () => new Map(respondeAs.map((item) => [String(item.id), item])),
+    [respondeAs],
   );
   const metaByIndicatorId = useMemo(
     () =>
@@ -211,6 +241,25 @@ const Seguimientos = ({ data, userInfo }) => {
         return false;
       }
       if (
+        selectedTipoDependencia &&
+        !matchesTipoDependenciaFilter(
+          indicator.id_dependencia,
+          selectedTipoDependencia,
+          tipoDependenciaById,
+        )
+      ) {
+        return false;
+      }
+      if (
+        !matchesRespondeAFilter(
+          indicator.id_responde_a,
+          selectedRespondeA,
+          respondeAById,
+        )
+      ) {
+        return false;
+      }
+      if (
         selectedConvergente &&
         String(indicator.id_estrategia_convergente || "") !==
           selectedConvergente
@@ -235,12 +284,6 @@ const Seguimientos = ({ data, userInfo }) => {
       ) {
         return false;
       }
-      if (
-        logroFilter &&
-        !normalize(indicator.logro).includes(normalize(logroFilter))
-      ) {
-        return false;
-      }
       return true;
     });
   }, [
@@ -248,12 +291,14 @@ const Seguimientos = ({ data, userInfo }) => {
     canSeeAll,
     userDependencyId,
     selectedDependency,
+    selectedTipoDependencia,
     selectedDesafio,
+    selectedRespondeA,
     selectedConvergente,
     selectedFacultad,
     selectedPrograma,
     selectedResultado,
-    logroFilter,
+    respondeAById,
   ]);
 
   const rowsByDesafio = useMemo(() => {
@@ -292,6 +337,13 @@ const Seguimientos = ({ data, userInfo }) => {
     );
     return dependencias.filter((item) => ids.has(String(item.id)));
   }, [dependencias, filterableIndicators]);
+
+  const desafioOptions = useMemo(() => {
+    const ids = new Set(
+      filterableIndicators.map((item) => String(item.id_desafio || "")),
+    );
+    return desafios.filter((item) => ids.has(String(item.id)));
+  }, [desafios, filterableIndicators]);
 
   const convergenteOptions = useMemo(() => {
     const ids = selectedDesafio
@@ -353,6 +405,17 @@ const Seguimientos = ({ data, userInfo }) => {
     );
   }, [indicadoresResultado, filterableIndicators, selectedPrograma]);
 
+  const clearFilters = () => {
+    setSelectedDependency(canSeeAll ? "" : userDependencyId);
+    setSelectedDesafio("");
+    setSelectedRespondeA("");
+    setSelectedTipoDependencia("");
+    setSelectedConvergente("");
+    setSelectedFacultad("");
+    setSelectedPrograma("");
+    setSelectedResultado("");
+  };
+
   const totals = useMemo(() => {
     let totalIndicadores = 0;
     const executed = rowsByDesafio.reduce((sum, group) => {
@@ -404,94 +467,292 @@ const Seguimientos = ({ data, userInfo }) => {
   }, [filterableIndicators, avanceByIndicatorId, selectedYear]);
 
   const exportToPdf = () => {
-    const printWindow = window.open("", "_blank", "width=1200,height=800");
-    if (!printWindow) return;
+    // Crear documento PDF
+    const doc = new jsPDF("p", "mm", "a4");
+    const pageWidth = doc.internal.pageSize.getWidth();
 
-    const headerDate = getHeaderDate();
-    const currentTime = getCurrentTime();
-    const filtersText = [
-      `Año: ${selectedYear}`,
-      `Dependencia: ${selectedDependency || "Todas"}`,
-      `Desafío: ${selectedDesafio || "Todos"}`,
-      `Estrategia convergente: ${selectedConvergente || "Todas"}`,
-      `Estrategia facultad: ${selectedFacultad || "Todas"}`,
-      `Programa institucional: ${selectedPrograma || "Todos"}`,
-      `Indicador resultado: ${selectedResultado || "Todos"}`,
-      `Logro: ${logroFilter || "Todos"}`,
+    // Configurar fuente
+    doc.setFont("helvetica");
+
+    // Título principal
+    doc.setFontSize(18);
+    doc.setTextColor(0, 0, 0);
+    doc.text("Reporte de Seguimientos", pageWidth / 2, 20, { align: "center" });
+
+    // Línea separadora
+    doc.setDrawColor(200, 200, 200);
+    doc.line(20, 25, pageWidth - 20, 25);
+
+    // Información de filtros y fecha
+    doc.setFontSize(10);
+    doc.setTextColor(80, 80, 80);
+    let yPosition = 35;
+
+    // Fecha de actualización
+    doc.text(`Fecha de actualización: ${getHeaderDate()}`, 20, yPosition);
+    yPosition += 6;
+
+    // Hora de generación del reporte
+    doc.text(`Hora de generación: ${getCurrentTime()}`, 20, yPosition);
+    yPosition += 6;
+
+    // Construir cadena de filtros
+    const filtros = [];
+
+    // Obtener nombres de los filtros seleccionados
+    const depName = selectedDependency
+      ? dependencyOptions.find((d) => String(d.id) === selectedDependency)
+          ?.nombre || selectedDependency
+      : "Todos";
+    filtros.push(`Dependencia: ${depName}`);
+
+    const desafioName = selectedDesafio
+      ? desafios.find((d) => String(d.id) === selectedDesafio)?.titulo ||
+        selectedDesafio
+      : "Todos";
+    filtros.push(`Desafío: ${desafioName}`);
+
+    const respondeAName = selectedRespondeA || "Todas";
+    filtros.push(`Responde a: ${respondeAName}`);
+
+    const tipoDependenciaName = selectedTipoDependencia
+      ? tipoDependenciaById.get(String(selectedTipoDependencia))?.tipo ||
+        selectedTipoDependencia
+      : "Todos";
+    filtros.push(`Tipo de dependencia: ${tipoDependenciaName}`);
+
+    const convName = selectedConvergente
+      ? estrategiasConvergentes.find(
+          (d) => String(d.id) === selectedConvergente,
+        )?.titulo || selectedConvergente
+      : "Todas";
+    filtros.push(`Estrategia Convergente: ${convName}`);
+
+    const facName = selectedFacultad
+      ? estrategiasFacultad.find((d) => String(d.id) === selectedFacultad)
+          ?.titulo || selectedFacultad
+      : "Todas";
+    filtros.push(`Estrategia Facultad: ${facName}`);
+
+    const progName = selectedPrograma
+      ? programasInstitucionales.find((d) => String(d.id) === selectedPrograma)
+          ?.titulo || selectedPrograma
+      : "Todos";
+    filtros.push(`Programa Institucional: ${progName}`);
+
+    const resName = selectedResultado
+      ? indicadoresResultado.find((d) => String(d.id) === selectedResultado)
+          ?.nombre || selectedResultado
+      : "Todos";
+    filtros.push(`Indicador Resultado: ${resName}`);
+
+    // Mostrar filtros en una línea o varias si es necesario
+    const filtrosText = `Filtros: ${filtros.join(", ")}`;
+    const splitText = doc.splitTextToSize(filtrosText, pageWidth - 40);
+    splitText.forEach((line, index) => {
+      doc.text(line, 20, yPosition + index * 5);
+    });
+    yPosition += splitText.length * 5 + 5;
+
+    // Línea separadora después de filtros
+    doc.line(20, yPosition - 2, pageWidth - 20, yPosition - 2);
+    yPosition += 5;
+
+    // Tabla de indicadores
+    const tableData = [];
+
+    rowsByDesafio.forEach((group) => {
+      group.indicators.forEach((indicator, index) => {
+        tableData.push([
+          index === 0 ? toText(group.desafio.titulo) : "",
+          toText(indicator.nombre),
+          formatPercent(indicator.metaValue),
+          indicator.avanceValue,
+        ]);
+      });
+    });
+
+    // Agregar filas de totales
+    tableData.push([
+      "",
+      "Total porcentaje ejecutado",
+      "",
+      `${totals.promedio.toFixed(1).replace(".", ",")}%`,
+    ]);
+
+    tableData.push([
+      "",
+      "Pendiente por ejecutar",
+      "",
+      `${totals.pending.toFixed(1).replace(".", ",")}%`,
+    ]);
+
+    // Crear tabla
+    autoTable(doc, {
+      startY: yPosition,
+      head: [
+        ["Desafío", "Nombre Indicador", "Meta Planeada", "Meta Ejecutada"],
+      ],
+      body: tableData,
+      theme: "grid",
+      styles: {
+        fontSize: 8,
+        cellPadding: 3,
+      },
+      headStyles: {
+        fillColor: [52, 73, 94],
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+      },
+      columnStyles: {
+        0: { cellWidth: "auto" },
+        1: { cellWidth: "auto" },
+        2: { cellWidth: 30 },
+        3: { cellWidth: 30 },
+      },
+      // Colorear celdas de porcentaje
+      didDrawCell: function (data) {
+        if (data.column.index === 3 && data.row.index < tableData.length - 3) {
+          const value = data.cell.raw;
+          if (value && value !== "") {
+            const cleanValue = String(value)
+              .replace("%", "")
+              .replace(",", ".")
+              .trim();
+            const numValue = parseFloat(cleanValue);
+            if (!isNaN(numValue)) {
+              let color;
+              if (numValue >= 90)
+                color = [144, 238, 144]; // lightgreen
+              else if (numValue >= 50)
+                color = [173, 216, 230]; // lightblue
+              else if (numValue >= 30)
+                color = [255, 255, 0]; // yellow
+              else if (numValue >= 0) color = [250, 128, 114]; // salmon
+              if (color) {
+                doc.setFillColor(color[0], color[1], color[2]);
+                doc.rect(
+                  data.cell.x,
+                  data.cell.y,
+                  data.cell.width,
+                  data.cell.height,
+                  "F",
+                );
+                // Redibujar texto
+                doc.setTextColor(0, 0, 0);
+                const textX = data.cell.x + data.cell.width / 2;
+                const textY = data.cell.y + data.cell.height / 2 + 2;
+                doc.text(data.cell.raw, textX, textY, { align: "center" });
+              }
+            }
+          }
+        }
+      },
+    });
+
+    // Agregar página para resumen si es necesario
+    const lastY = doc.lastAutoTable?.finalY || yPosition;
+    if (lastY + 60 > doc.internal.pageSize.height) {
+      doc.addPage();
+    }
+
+    // Resumen
+    const summaryY = lastY + 15;
+    doc.setFontSize(14);
+    doc.setTextColor(0, 0, 0);
+    doc.text("Resumen", 20, summaryY);
+
+    // Tabla de resumen
+    const summaryData = [
+      ["Total indicadores", filterableIndicators.length.toString()],
+      ...challengeCounts.map((item) => [
+        toText(item.desafio.titulo),
+        item.count.toString(),
+      ]),
     ];
 
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Seguimientos</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 24px; color: #111; }
-            h1, h2, p { margin: 0 0 8px; }
-            .meta { margin-bottom: 16px; font-size: 12px; color: #444; }
-            .filters { margin-bottom: 16px; font-size: 12px; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-            th, td { border: 1px solid #ccc; padding: 6px; font-size: 11px; }
-            th { background: #f1f1f1; }
-            .c-green { background: lightgreen; }
-            .c-blue { background: lightblue; }
-            .c-yellow { background: yellow; }
-            .c-salmon { background: salmon; }
-          </style>
-        </head>
-        <body>
-          <h1>Seguimientos</h1>
-          <div class="meta">Última actualización: ${headerDate} | Hora de exportación: ${currentTime}</div>
-          <div class="filters">
-            <strong>Filtros activos</strong><br/>
-            ${filtersText.map((item) => `${item}<br/>`).join("")}
-          </div>
-          ${rowsByDesafio
-            .map(
-              (group) => `
-                <h2>${toText(group.desafio.titulo)}</h2>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Indicador</th>
-                      <th>Meta</th>
-                      <th>Avance</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${group.indicators
-                      .map((indicator) => {
-                        const bg = percentageClass(indicator.avanceValue);
-                        const cls =
-                          bg === "lightgreen"
-                            ? "c-green"
-                            : bg === "lightblue"
-                              ? "c-blue"
-                              : bg === "yellow"
-                                ? "c-yellow"
-                                : bg === "salmon"
-                                  ? "c-salmon"
-                                  : "";
-                        return `
-                          <tr>
-                            <td>${toText(indicator.nombre)}</td>
-                            <td>${formatPercent(indicator.metaValue)}</td>
-                            <td class="${cls}">${toText(indicator.avanceValue)}</td>
-                          </tr>
-                        `;
-                      })
-                      .join("")}
-                  </tbody>
-                </table>
-              `,
-            )
-            .join("")}
-          <script>
-            window.onload = function () { window.print(); window.close(); };
-          </script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
+    const summaryStartY = summaryY + 5;
+    autoTable(doc, {
+      startY: summaryStartY,
+      head: [["Concepto", "Cantidad"]],
+      body: summaryData,
+      theme: "grid",
+      styles: {
+        fontSize: 9,
+        cellPadding: 3,
+      },
+      headStyles: {
+        fillColor: [52, 73, 94],
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+      },
+    });
+
+    // Contador de indicadores por color
+    const colorStartY = doc.lastAutoTable?.finalY + 10 || summaryStartY + 30;
+    doc.setFontSize(12);
+    doc.text(
+      "Contador de indicadores y significado de colores",
+      20,
+      colorStartY,
+    );
+
+    const colorData = [
+      [
+        "Mayores de 90%",
+        indicatorColorCounts.superior.toString(),
+        "Verde claro",
+      ],
+      ["Entre 50% y 89%", indicatorColorCounts.alto.toString(), "Azul claro"],
+      ["Entre 30% y 49%", indicatorColorCounts.medio.toString(), "Amarillo"],
+      ["Entre 0% y 29%", indicatorColorCounts.bajo.toString(), "Salmon"],
+    ];
+
+    autoTable(doc, {
+      startY: colorStartY + 5,
+      head: [["Rango", "Cantidad", "Color"]],
+      body: colorData,
+      theme: "grid",
+      styles: {
+        fontSize: 9,
+        cellPadding: 3,
+      },
+      headStyles: {
+        fillColor: [52, 73, 94],
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+      },
+      didDrawCell: function (data) {
+        // Colorear celdas de "Color"
+        if (data.column.index === 2 && data.row.index < colorData.length) {
+          const colorName = data.cell.raw.toLowerCase();
+          let bgColor;
+          if (colorName.includes("verde")) bgColor = [144, 238, 144];
+          else if (colorName.includes("azul")) bgColor = [173, 216, 230];
+          else if (colorName.includes("amarillo")) bgColor = [255, 255, 0];
+          else if (colorName.includes("salmon")) bgColor = [250, 128, 114];
+
+          if (bgColor) {
+            doc.setFillColor(bgColor[0], bgColor[1], bgColor[2]);
+            doc.rect(
+              data.cell.x,
+              data.cell.y,
+              data.cell.width,
+              data.cell.height,
+              "F",
+            );
+            // Redibujar texto
+            doc.setTextColor(0, 0, 0);
+            const textX = data.cell.x + data.cell.width / 2;
+            const textY = data.cell.y + data.cell.height / 2 + 2;
+            doc.text(data.cell.raw, textX, textY, { align: "center" });
+          }
+        }
+      },
+    });
+
+    // Guardar PDF
+    doc.save(`seguimientos_${getHeaderDate().replace(/\//g, "_")}.pdf`);
   };
 
   if (!data) {
@@ -515,7 +776,7 @@ const Seguimientos = ({ data, userInfo }) => {
             </Typography>
           </Box>
 
-          <FormControl size="small" sx={{ minWidth: 140 }}>
+          <FormControl size="small" sx={{ minWidth: 120 }}>
             <InputLabel>Año</InputLabel>
             <Select
               value={selectedYear}
@@ -533,7 +794,7 @@ const Seguimientos = ({ data, userInfo }) => {
             </Select>
           </FormControl>
 
-          <FormControl size="small" sx={{ minWidth: 220 }}>
+          <FormControl size="small" sx={{ minWidth: 150 }}>
             <InputLabel>Dependencia</InputLabel>
             <Select
               value={selectedDependency}
@@ -549,32 +810,33 @@ const Seguimientos = ({ data, userInfo }) => {
               ))}
             </Select>
           </FormControl>
-
+          <Button variant="outlined" onClick={clearFilters}>
+            Limpiar filtros
+          </Button>
           <Button
-            variant="outlined"
-            onClick={() => setAdvancedFiltersOpen(true)}
+            variant={advancedFiltersOpen ? "contained" : "outlined"}
+            onClick={() => setAdvancedFiltersOpen((prev) => !prev)}
           >
-            Ver más filtros
+            {advancedFiltersOpen ? "Ocultar filtros" : "Ver más filtros"}
           </Button>
           <Button variant="contained" onClick={exportToPdf}>
             Exportar a pdf
           </Button>
         </Box>
-      </Paper>
 
-      <Dialog
-        open={advancedFiltersOpen}
-        onClose={() => setAdvancedFiltersOpen(false)}
-        fullWidth
-        maxWidth="md"
-      >
-        <DialogTitle>Más filtros</DialogTitle>
-        <DialogContent dividers>
+        <Box className="seguimientos-responde-a-row"></Box>
+
+        {advancedFiltersOpen && (
           <Box
+            className="seguimientos-advanced-filters"
             sx={{
               display: "grid",
               gap: 2,
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gridTemplateColumns: {
+                xs: "1fr",
+                md: "repeat(2, minmax(0, 1fr))",
+                lg: "repeat(3, minmax(0, 1fr))",
+              },
             }}
           >
             <FormControl size="small" fullWidth>
@@ -585,7 +847,7 @@ const Seguimientos = ({ data, userInfo }) => {
                 onChange={(e) => setSelectedDesafio(e.target.value)}
               >
                 <MenuItem value="">Todos</MenuItem>
-                {desafios.map((item) => (
+                {desafioOptions.map((item) => (
                   <MenuItem key={item.id} value={String(item.id)}>
                     {toText(item.titulo)}
                   </MenuItem>
@@ -622,7 +884,7 @@ const Seguimientos = ({ data, userInfo }) => {
                 ))}
               </Select>
             </FormControl>
-            <FormControl size="small" fullWidth>
+            <FormControl size="small">
               <InputLabel>Programa institucional</InputLabel>
               <Select
                 value={selectedPrograma}
@@ -637,7 +899,7 @@ const Seguimientos = ({ data, userInfo }) => {
                 ))}
               </Select>
             </FormControl>
-            <FormControl size="small" fullWidth>
+            <FormControl size="small">
               <InputLabel>Indicador resultado</InputLabel>
               <Select
                 value={selectedResultado}
@@ -652,19 +914,60 @@ const Seguimientos = ({ data, userInfo }) => {
                 ))}
               </Select>
             </FormControl>
-            <TextField
-              fullWidth
-              size="small"
-              label="Logro"
-              value={logroFilter}
-              onChange={(e) => setLogroFilter(e.target.value)}
-            />
+
+            <FormControl size="small">
+              <Typography className="radio-group-title">
+                Tipo de dependencia
+              </Typography>
+              <RadioGroup
+                row
+                value={selectedTipoDependencia}
+                onChange={(e) => setSelectedTipoDependencia(e.target.value)}
+              >
+                <FormControlLabel
+                  value=""
+                  control={<Radio size="small" />}
+                  label="Todas"
+                />
+                <FormControlLabel
+                  value="Oficina"
+                  control={<Radio size="small" />}
+                  label="Oficina"
+                />
+                <FormControlLabel
+                  value="Escuela"
+                  control={<Radio size="small" />}
+                  label="Escuela"
+                />
+              </RadioGroup>
+            </FormControl>
+            <FormControl className="filter-radio-group-block">
+              <Typography className="radio-group-title">Responde a</Typography>
+              <RadioGroup
+                row
+                value={selectedRespondeA}
+                onChange={(e) => setSelectedRespondeA(e.target.value)}
+              >
+                <FormControlLabel
+                  value=""
+                  control={<Radio size="small" />}
+                  label="Todas"
+                />
+                <FormControlLabel
+                  value="MT"
+                  control={<Radio size="small" />}
+                  label="MT"
+                />
+                <FormControlLabel
+                  value="CNA"
+                  control={<Radio size="small" />}
+                  label="CNA"
+                />
+              </RadioGroup>
+            </FormControl>
           </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAdvancedFiltersOpen(false)}>Cerrar</Button>
-        </DialogActions>
-      </Dialog>
+        )}
+      </Paper>
 
       <Box className="seguimientos-layout">
         <TableContainer component={Paper} className="seguimientos-table-card">

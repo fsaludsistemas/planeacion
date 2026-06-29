@@ -17,6 +17,40 @@
   flex-wrap: wrap;
 }
 
+
+.seguimientos-advanced-filters .filters-secondary-box {
+  margin-top: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.seguimientos-responde-a-row {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #d7dee4;
+}
+
+.seguimientos-responde-a-row .filter-radio-group-block {
+  min-width: 280px;
+}
+
+.seguimientos-responde-a-row .radio-group-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #374151;
+  margin-bottom: 2px;
+}
+
+.seguimientos-advanced-filters {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #d7dee4;
+}
+
 .seguimientos-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
