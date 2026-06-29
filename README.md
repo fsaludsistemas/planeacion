@@ -358,4 +358,109 @@ dist
 
 ---
 
+
+## Trabajo de autoguardado y el manjeo de excel desde la app
+
+Modal con Google Sheets recortado + autoguardado
+1. Modal que muestra una pestaña de Google Sheets (sin menú ni toolbar)
+La idea es abrir un Dialog de MUI con un <iframe> apuntando a la URL de un sheet, pero "2recortando" visualmente la barra de menú superior y los números de fila/columna, para que solo se vean las celdas.
+Código mínimo:
+```js
+import { Dialog, DialogContent, IconButton, Box, CircularProgress, Button } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
+
+const SHEETS_TOP_CROP = 24;   // px a recortar del menú superior
+const SHEETS_LEFT_CROP = 44;  // px a recortar de los índices de fila
+
+function SheetModal({ open, onClose, sheetUrl, label }) {
+  return (
+    <>
+      <Button onClick={() => onClose(false)}>{label}</Button>
+
+      <Dialog open={open} onClose={() => onClose(false)}
+        PaperProps={{ sx: { width: '80%', height: '800px', maxWidth: 'none' } }}>
+        <DialogContent sx={{ position: 'relative' }}>
+          <IconButton onClick={() => onClose(false)}
+            sx={{ position: 'absolute', top: 8, right: 8, zIndex: 10 }}>
+            <CloseIcon />
+          </IconButton>
+
+          {/* Contenedor con overflow hidden = lo que sobresale se oculta */}
+          <Box sx={{ mt: 4, height: '80vh', overflow: 'hidden', position: 'relative' }}>
+            <iframe
+              src={sheetUrl}
+              style={{
+                position: 'absolute',
+                top: `-${SHEETS_TOP_CROP}px`,        // sube 24px: oculta el menú
+                left: `-${SHEETS_LEFT_CROP}px`,       // corre 44px: oculta los números de fila
+                width: `calc(101.1% + ${SHEETS_LEFT_CROP}px)`,
+                height: `calc(150% + ${SHEETS_TOP_CROP}px)`,
+                border: 'none',
+              }}
+              loading="lazy"
+            />
+          </Box>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+```
+Cómo funciona el recorte
+El contenedor tiene overflow: 'hidden' entonces todo lo que se salga del contenedor queda oculto
+El <iframe> está desplazado con position: absolute:
+top: -24px → sube 24px, la barra de menú queda fuera del contenedor y no se ve
+left: -44px → corre 44px a la izquierda, los números de fila quedan fuera
+El iframe se agranda (height: 150%, width: 101.1%) para que el área visible del sheet llene el contenedor
+Ajustá SHEETS_TOP_CROP y SHEETS_LEFT_CROP si Google Sheets cambia el tamaño de su UI.
+
+## Autoguardado del campo de Logro
+2. Autoguardado: cuando el usuario escribe, se envía a Google Sheets
+La idea es que cada vez que el usuario escribe en un input, se inicia un temporizador de debounce de ~900ms. Si el usuario deja de escribir ese tiempo, se dispara la peticion a la API que escribe el valor en la celda correspondiente del sheet.
+Usuario escribe → setTimeout(900ms)
+  ↻ si sigue escribiendo → se reinicia el timer
+  ✓ si pasan 900ms sin cambios → fetch POST a /api/update
+                                → Google Sheets API: values.update()
+codigo mínimo:
+Frontend (React + MUI)
+```js
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { TextField } from '@mui/material';
+
+function CampoConAutoguardado({ id, valorInicial, onSave }) {
+  const [value, setValue] = useState(valorInicial ?? '');
+  const timerRef = useRef(null);
+
+  // Limpieza al desmontar el componente
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  const handleChange = (e) => {
+    const v = e.target.value;
+    setValue(v);
+
+    // Reinicia el timer cada vez que el usuario escribe
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      // Pasaron 900ms sin escribir → guardar
+      onSave([{ id, valor: v }]);
+    }, 900);
+  };
+
+  return (
+    <TextField
+      value={value}
+      onChange={handleChange}
+      fullWidth
+    />
+  );
+}
+```
+
+
+
+
 Si quieres, en un siguiente paso puedo dejar el README aun mas afinado con ejemplos reales de payload para `INDICADORES_PRODUCTO`, `METAS` y `AVANCES`.

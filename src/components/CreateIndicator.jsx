@@ -361,16 +361,7 @@ const CreateIndicator = ({
                 ))}
               </TextField>
             </Grid>
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                multiline
-                minRows={4}
-                label="Logro (opcional)"
-                value={form.logro}
-                onChange={handleChange("logro")}
-              />
-            </Grid>
+
             <Grid item xs={12} md={4}>
               <TextField
                 select

@@ -59,7 +59,7 @@
 
 .indicator-list-header {
   display: grid;
-  grid-template-columns: 90px 2fr 1.4fr;
+  grid-template-columns: 90px 2fr 1.4fr 1.4fr;
   gap: 22px;
   padding: 12px 16px;
   margin-bottom: 10px;
@@ -91,7 +91,7 @@
 .indicator-summary-grid {
   width: 100%;
   display: grid;
-  grid-template-columns: 90px 2fr 1.4fr;
+  grid-template-columns: 90px 2fr 1.4fr 1.25fr;
   gap: 22px;
   align-items: start;
   padding-right: 14px;

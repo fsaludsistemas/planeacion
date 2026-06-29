@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Accordion,
   AccordionDetails,
@@ -61,6 +61,12 @@ const getTipoDependencia = (dependencia) => {
   return "No definido";
 };
 
+const matchesRespondeAFilter = (idRespondeA, filterValue, respondeAById) => {
+  if (!filterValue) return true;
+  const item = respondeAById.get(String(idRespondeA));
+  return normalize(item?.nombre) === normalize(filterValue);
+};
+
 const IndicatorsPage = ({ data, userInfo }) => {
   const [filters, setFilters] = useState({
     dependencia: "",
@@ -83,6 +89,15 @@ const IndicatorsPage = ({ data, userInfo }) => {
   const [busyId, setBusyId] = useState("");
   const [evidenceUrls, setEvidenceUrls] = useState({});
   const [logroValues, setLogroValues] = useState({});
+  const logroSaveTimersRef = useRef({});
+
+  useEffect(() => {
+    return () => {
+      Object.values(logroSaveTimersRef.current).forEach((timerId) => {
+        if (timerId) clearTimeout(timerId);
+      });
+    };
+  }, []);
 
   const sessionUser = useMemo(() => {
     if (userInfo) return userInfo;
@@ -98,7 +113,10 @@ const IndicatorsPage = ({ data, userInfo }) => {
     () => sortById(getSheet(data, "INDICADORES_PRODUCTO")),
     [data],
   );
-  const usuarios = useMemo(() => sortById(getSheet(data, USERS_SHEET_NAME)), [data]);
+  const usuarios = useMemo(
+    () => sortById(getSheet(data, USERS_SHEET_NAME)),
+    [data],
+  );
   const dependencias = useMemo(
     () => sortById(getSheet(data, "DEPENDENCIA", "DEPENDENCIAS")),
     [data],
@@ -170,7 +188,9 @@ const IndicatorsPage = ({ data, userInfo }) => {
   const userDependencyId = String(sessionUser?.id_dependencia || "").trim();
   const userRole = normalizeRole(sessionUser?.rol || sessionUser?.permiso);
   const isAdminOrSystems =
-    userDependencyId === "0" || userRole === "sistemas" || userRole === "administrador";
+    userDependencyId === "0" ||
+    userRole === "sistemas" ||
+    userRole === "administrador";
   const isRegularUser = userRole === "usuario";
 
   const baseRows = useMemo(() => {
@@ -219,82 +239,106 @@ const IndicatorsPage = ({ data, userInfo }) => {
   }, [baseRows, isAdminOrSystems, userDependencyId]);
 
   const filterOptions = useMemo(() => {
-    const filteredDependencias =
+    const scopedRows =
       filters.tipoDependencia === "TODAS"
-        ? dependencias
-        : dependencias.filter(
-            (item) => getTipoDependencia(item) === filters.tipoDependencia,
+        ? visibleRows
+        : visibleRows.filter(
+            (row) =>
+              getTipoDependencia(row.dependencia) === filters.tipoDependencia,
           );
-    const selectedDesafioIds = filters.desafio
-      ? [filters.desafio]
-      : desafios.map((item) => String(item.id));
-    const selectedConvergenteIds = filters.estrategiaConvergente
-      ? [filters.estrategiaConvergente]
-      : estrategiasConvergentes
-          .filter((item) =>
-            selectedDesafioIds.includes(String(item.id_desafio || "")),
-          )
-          .map((item) => String(item.id));
-    const selectedFacultadIds = filters.estrategiaFacultad
-      ? [filters.estrategiaFacultad]
-      : estrategiasFacultad
-          .filter((item) =>
-            selectedConvergenteIds.includes(
-              String(item.id_estrategia_convergente || item.id_convergente || ""),
-            ),
-          )
-          .map((item) => String(item.id));
-    const selectedProgramaIds = filters.programaInstitucional
-      ? [filters.programaInstitucional]
-      : programasInstitucionales
-          .filter((item) =>
-            selectedFacultadIds.includes(
-              String(item.id_estrategia_facultad || ""),
-            ),
-          )
-          .map((item) => String(item.id));
+    const dependencyIds = new Set(
+      scopedRows.map((row) => String(row.id_dependencia || "")),
+    );
+    const respondeAIds = new Set(
+      scopedRows.map((row) => String(row.id_responde_a || "")),
+    );
+    const desafioIds = new Set(
+      scopedRows.map((row) => String(row.id_desafio || "")),
+    );
+
+    const convergenteScopeRows = filters.desafio
+      ? scopedRows.filter(
+          (row) => String(row.id_desafio || "") === filters.desafio,
+        )
+      : scopedRows;
+    const convergenteIds = new Set(
+      convergenteScopeRows.map((row) =>
+        String(row.id_estrategia_convergente || ""),
+      ),
+    );
+    const facultadScopeRows = filters.estrategiaConvergente
+      ? scopedRows.filter(
+          (row) =>
+            String(row.id_estrategia_convergente || "") ===
+            filters.estrategiaConvergente,
+        )
+      : convergenteScopeRows;
+    const facultadIds = new Set(
+      facultadScopeRows.map((row) => String(row.id_estrategia_facultad || "")),
+    );
+    const programaScopeRows = filters.estrategiaFacultad
+      ? scopedRows.filter(
+          (row) =>
+            String(row.id_estrategia_facultad || "") ===
+            filters.estrategiaFacultad,
+        )
+      : facultadScopeRows;
+    const resultScopeRows = filters.programaInstitucional
+      ? scopedRows.filter(
+          (row) =>
+            String(row.id_programa_inst || "") ===
+            filters.programaInstitucional,
+        )
+      : programaScopeRows;
+    const programaIds = new Set(
+      programaScopeRows.map((row) => String(row.id_programa_inst || "")),
+    );
     return {
-      dependencias: sortById(filteredDependencias),
-      respondeAs,
-      desafios: sortById(desafios),
+      dependencias: sortById(
+        dependencias.filter((item) => dependencyIds.has(String(item.id))),
+      ),
+      respondeAs: sortById(
+        respondeAs.filter((item) => respondeAIds.has(String(item.id))),
+      ),
+      desafios: sortById(
+        desafios.filter((item) => desafioIds.has(String(item.id))),
+      ),
       estrategiasConvergentes: sortById(
         estrategiasConvergentes.filter((item) =>
-          selectedDesafioIds.includes(String(item.id_desafio || "")),
+          convergenteIds.has(String(item.id)),
         ),
       ),
       estrategiasFacultad: sortById(
-        estrategiasFacultad.filter((item) =>
-          selectedConvergenteIds.includes(
-            String(item.id_estrategia_convergente || item.id_convergente || ""),
-          ),
-        ),
+        estrategiasFacultad.filter((item) => facultadIds.has(String(item.id))),
       ),
       programasInstitucionales: sortById(
         programasInstitucionales.filter((item) =>
-          selectedFacultadIds.includes(
-            String(item.id_estrategia_facultad || ""),
-          ),
+          programaIds.has(String(item.id)),
         ),
       ),
       indicadoresResultado: sortById(
         indicadoresResultado.filter((item) =>
-          selectedProgramaIds.includes(String(item.id_programa_inst || "")),
+          resultScopeRows.some(
+            (row) =>
+              String(row.id_indicador_resultado || "") === String(item.id),
+          ),
         ),
       ),
     };
   }, [
+    visibleRows,
     dependencias,
     desafios,
+    respondeAs,
     estrategiasConvergentes,
     estrategiasFacultad,
     programasInstitucionales,
     indicadoresResultado,
-    respondeAs,
+    filters.tipoDependencia,
     filters.desafio,
     filters.estrategiaConvergente,
     filters.estrategiaFacultad,
     filters.programaInstitucional,
-    filters.tipoDependencia,
   ]);
 
   const filteredRows = useMemo(() => {
@@ -312,8 +356,11 @@ const IndicatorsPage = ({ data, userInfo }) => {
         return false;
       }
       if (
-        filters.respondeA &&
-        String(row.id_responde_a) !== filters.respondeA
+        !matchesRespondeAFilter(
+          row.id_responde_a,
+          filters.respondeA,
+          respondeAById,
+        )
       ) {
         return false;
       }
@@ -346,7 +393,7 @@ const IndicatorsPage = ({ data, userInfo }) => {
       }
       return true;
     });
-  }, [visibleRows, filters]);
+  }, [visibleRows, filters, respondeAById]);
 
   const clearFilters = () => {
     setFilters({
@@ -394,12 +441,14 @@ const IndicatorsPage = ({ data, userInfo }) => {
     setExpandedId(null);
   };
 
-  const updateIndicator = async (id, payload) => {
+  const updateIndicator = async (id, payload, { reload = true } = {}) => {
     setBusyId(String(id));
     setActionError("");
     try {
       await updateSheetRow(SHEET_NAME, id, payload);
-      window.location.reload();
+      if (reload) {
+        window.location.reload();
+      }
     } catch (error) {
       setActionError(
         error?.response?.data?.message || "No se pudo actualizar el indicador.",
@@ -410,7 +459,6 @@ const IndicatorsPage = ({ data, userInfo }) => {
   };
 
   const canEditAllIndicators = isAdminOrSystems;
-  const canEditLogroOnly = isRegularUser;
   const currentUserId = String(sessionUser?.id || "");
   const isIndicatorOwnedByUser = (indicator) =>
     String(indicator.responsable || "") === currentUserId;
@@ -439,9 +487,13 @@ const IndicatorsPage = ({ data, userInfo }) => {
 
     if (nextValue === currentValue) return;
 
-    await updateIndicator(indicator.id, {
-      [EVIDENCE_URL_FIELD]: nextValue,
-    });
+    await updateIndicator(
+      indicator.id,
+      {
+        [EVIDENCE_URL_FIELD]: nextValue,
+      },
+      { reload: false },
+    );
   };
 
   const getLogroValue = (indicator) => {
@@ -456,17 +508,53 @@ const IndicatorsPage = ({ data, userInfo }) => {
       ...prev,
       [String(indicatorId)]: value,
     }));
+
+    const timerKey = String(indicatorId);
+    if (logroSaveTimersRef.current[timerKey]) {
+      clearTimeout(logroSaveTimersRef.current[timerKey]);
+    }
+    logroSaveTimersRef.current[timerKey] = setTimeout(() => {
+      void (async () => {
+        try {
+          const nextValue = String(value ?? "").trim();
+          if (!nextValue) {
+            await updateIndicator(
+              indicatorId,
+              { logro: "" },
+              { reload: false },
+            );
+            return;
+          }
+          await updateIndicator(
+            indicatorId,
+            { logro: nextValue },
+            { reload: false },
+          );
+        } finally {
+          delete logroSaveTimersRef.current[timerKey];
+        }
+      })();
+    }, 900);
   };
 
   const handleLogroBlur = (indicator) => async () => {
+    const timerKey = String(indicator.id);
+    if (logroSaveTimersRef.current[timerKey]) {
+      clearTimeout(logroSaveTimersRef.current[timerKey]);
+      delete logroSaveTimersRef.current[timerKey];
+    }
     const nextValue = getLogroValue(indicator).trim();
     const currentValue = String(indicator?.logro ?? "").trim();
 
     if (nextValue === currentValue) return;
 
-    await updateIndicator(indicator.id, {
-      logro: nextValue,
-    });
+    await updateIndicator(
+      indicator.id,
+      {
+        logro: nextValue,
+      },
+      { reload: false },
+    );
   };
 
   const buildMetaPayload = (indicatorId, payload) => {
@@ -638,22 +726,6 @@ const IndicatorsPage = ({ data, userInfo }) => {
           </FormControl>
 
           <FormControl size="small" fullWidth>
-            <InputLabel>Responde a</InputLabel>
-            <Select
-              value={filters.respondeA}
-              label="Responde a"
-              onChange={handleFilterChange("respondeA")}
-            >
-              <MenuItem value="">Todos</MenuItem>
-              {filterOptions.respondeAs.map((item) => (
-                <MenuItem key={item.id} value={String(item.id)}>
-                  {toText(item.nombre)}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
-          <FormControl size="small" fullWidth>
             <InputLabel>Desafio</InputLabel>
             <Select
               value={filters.desafio}
@@ -761,6 +833,30 @@ const IndicatorsPage = ({ data, userInfo }) => {
               />
             </RadioGroup>
           </FormControl>
+          <FormControl className="filter-radio-group-block">
+            <Typography className="radio-group-title">Responde a</Typography>
+            <RadioGroup
+              row
+              value={filters.respondeA}
+              onChange={handleFilterChange("respondeA")}
+            >
+              <FormControlLabel
+                value=""
+                control={<Radio size="small" />}
+                label="Todas"
+              />
+              <FormControlLabel
+                value="MT"
+                control={<Radio size="small" />}
+                label="MT"
+              />
+              <FormControlLabel
+                value="CNA"
+                control={<Radio size="small" />}
+                label="CNA"
+              />
+            </RadioGroup>
+          </FormControl>
         </Box>
       </Paper>
 
@@ -777,6 +873,12 @@ const IndicatorsPage = ({ data, userInfo }) => {
         >
           Dependencia
         </Typography>
+        <Typography
+          className="summary-title indicator-summary-dependency"
+          sx={{ fontWeight: 700 }}
+        >
+          Avance
+        </Typography>
       </Paper>
 
       {filteredRows.map((indicator) => {
@@ -790,7 +892,7 @@ const IndicatorsPage = ({ data, userInfo }) => {
               setExpandedId(expanded ? indicator.id : null)
             }
           >
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
               <Box
                 className="indicator-summary-grid"
                 sx={{
@@ -817,90 +919,15 @@ const IndicatorsPage = ({ data, userInfo }) => {
                 >
                   {toText(indicator.dependencia?.nombre)}
                 </Typography>
+                <Typography
+                  sx={{ fontWeight: 700 }}
+                  className="indicator-summary-dependency"
+                >
+                  {toText(indicator.avance?.avance_2026) || "-"}
+                </Typography>
               </Box>
             </AccordionSummary>
             <AccordionDetails>
-              <Box className="indicator-detail-grid">
-                <Paper className="detail-item" elevation={0}>
-                  <Typography className="detail-label">Desafio</Typography>
-                  <Typography className="detail-value">
-                    {toText(indicator.desafio?.titulo)}
-                  </Typography>
-                </Paper>
-                <Paper className="detail-item" elevation={0}>
-                  <Typography className="detail-label">
-                    Estrategia convergente
-                  </Typography>
-                  <Typography className="detail-value">
-                    {toText(indicator.estrategiaConvergente?.titulo)}
-                  </Typography>
-                </Paper>
-                <Paper className="detail-item" elevation={0}>
-                  <Typography className="detail-label">
-                    Estrategia facultad
-                  </Typography>
-                  <Typography className="detail-value">
-                    {toText(indicator.estrategiaFacultad?.titulo)}
-                  </Typography>
-                </Paper>
-                <Paper className="detail-item" elevation={0}>
-                  <Typography className="detail-label">Responsable</Typography>
-                  <Typography className="detail-value">
-                    {toText(
-                      indicator.responsableUsuario?.correo ??
-                        indicator.responsable,
-                    )}
-                  </Typography>
-                </Paper>
-                <Paper className="detail-item" elevation={0}>
-                  <Typography className="detail-label">
-                    Programa institucional
-                  </Typography>
-                  <Typography className="detail-value">
-                    {toText(indicator.programaInstitucional?.titulo)}
-                  </Typography>
-                </Paper>
-              </Box>
-              <Box
-                sx={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: 1,
-                  mt: 2,
-                  flexWrap: "wrap",
-                }}
-              >
-                <Button
-                  variant="outlined"
-                  onClick={() => setDetailsState({ open: true, indicator })}
-                >
-                  Ver detalles
-                </Button>
-                {canEditAllIndicators ? (
-                  <>
-                    <Button
-                      variant="contained"
-                      onClick={() => setEditState({ open: true, indicator })}
-                    >
-                      Editar
-                    </Button>
-                    <Button
-                      color="error"
-                      variant="outlined"
-                      onClick={() => removeIndicator(indicator)}
-                    >
-                      Eliminar
-                    </Button>
-                  </>
-                ) : canEditLogroOnly ? (
-                  <Button
-                    variant="contained"
-                    onClick={() => setEditState({ open: true, indicator })}
-                  >
-                    Editar logro
-                  </Button>
-                ) : null}
-              </Box>
               <TableContainer
                 component={Paper}
                 sx={{ mt: 2 }}
@@ -909,30 +936,46 @@ const IndicatorsPage = ({ data, userInfo }) => {
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ fontWeight: 700 }}>Concepto</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Tipo</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>2026</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>
+                      <TableCell sx={{ fontWeight: 900, fontSize: "15px" }}>
+                        Concepto
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 900, fontSize: "15px" }}>
+                        Tipo
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 900, fontSize: "15px" }}>
+                        2026
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 900, fontSize: "15px" }}>
                         Total trienio
                       </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     <TableRow>
-                      <TableCell sx={{ fontWeight: 700 }}>Meta</TableCell>
-                      <TableCell>{toText(indicator.meta?.tipo)}</TableCell>
-                      <TableCell>{toText(indicator.meta?.meta_2026)}</TableCell>
-                      <TableCell>
+                      <TableCell sx={{ fontWeight: 900, fontSize: "15px" }}>
+                        Meta
+                      </TableCell>
+                      <TableCell sx={{ fontSize: "15px" }}>
+                        {toText(indicator.meta?.tipo)}
+                      </TableCell>
+                      <TableCell sx={{ fontSize: "15px" }}>
+                        {toText(indicator.meta?.meta_2026)}
+                      </TableCell>
+                      <TableCell sx={{ fontSize: "15px" }}>
                         {toText(indicator.meta?.total_trienio)}
                       </TableCell>
                     </TableRow>
                     <TableRow>
-                      <TableCell sx={{ fontWeight: 700 }}>Avance</TableCell>
-                      <TableCell>Porcentaje</TableCell>
-                      <TableCell>
+                      <TableCell sx={{ fontWeight: 900, fontSize: "15px" }}>
+                        Avance
+                      </TableCell>
+                      <TableCell sx={{ fontSize: "15px" }}>
+                        Porcentaje
+                      </TableCell>
+                      <TableCell sx={{ fontSize: "15px" }}>
                         {toText(indicator.avance?.avance_2026)}
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ fontSize: "15px" }}>
                         {toText(indicator.avance?.total_trienio || "-")}
                       </TableCell>
                     </TableRow>
@@ -963,7 +1006,7 @@ const IndicatorsPage = ({ data, userInfo }) => {
                 </Box>
                 <Box sx={{ gridColumn: "1 / -1" }}>
                   <Typography className="detail-label" sx={{ mb: 1 }}>
-                    Logro
+                    Descripción de Logro
                   </Typography>
                   <TextField
                     fullWidth
@@ -976,6 +1019,128 @@ const IndicatorsPage = ({ data, userInfo }) => {
                     onBlur={handleLogroBlur(indicator)}
                   />
                 </Box>
+              </Box>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: 1,
+                  mt: 2,
+                  mb: 2,
+                  flexWrap: "wrap",
+                }}
+              >
+                <Button
+                  variant="outlined"
+                  onClick={() => setDetailsState({ open: true, indicator })}
+                >
+                  Ver detalles
+                </Button>
+                {canEditAllIndicators ? (
+                  <>
+                    <Button
+                      variant="contained"
+                      onClick={() => setEditState({ open: true, indicator })}
+                    >
+                      Editar
+                    </Button>
+                    <Button
+                      color="error"
+                      variant="outlined"
+                      onClick={() => removeIndicator(indicator)}
+                    >
+                      Eliminar
+                    </Button>
+                  </>
+                ) : null}
+              </Box>
+              <Box className="indicator-detail-grid">
+                <Paper
+                  className="detail-item"
+                  elevation={0}
+                  size="small"
+                  sx={{ p: 1, minHeight: "auto" }}
+                >
+                  <Typography className="detail-label">Desafio</Typography>
+                  <Typography
+                    className="detail-value"
+                    sx={{
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2, // Cambia a 2 o más si quieres permitir más líneas antes del corte
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {toText(indicator.desafio?.titulo)}
+                  </Typography>
+                </Paper>
+                <Paper
+                  className="detail-item"
+                  elevation={0}
+                  size="small"
+                  sx={{ p: 1, minHeight: "auto" }}
+                >
+                  <Typography className="detail-label">
+                    Estrategia convergente
+                  </Typography>
+                  <Typography
+                    className="detail-value"
+                    sx={{
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2, // Cambia a 2 o más si quieres permitir más líneas antes del corte
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {toText(indicator.estrategiaConvergente?.titulo)}
+                  </Typography>
+                </Paper>
+                <Paper
+                  className="detail-item"
+                  elevation={0}
+                  size="small"
+                  sx={{ p: 1, minHeight: "auto" }}
+                >
+                  <Typography className="detail-label">
+                    Estrategia facultad
+                  </Typography>
+                  <Typography
+                    className="detail-value"
+                    sx={{
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2, // Cambia a 2 o más si quieres permitir más líneas antes del corte
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {toText(indicator.estrategiaFacultad?.titulo)}
+                  </Typography>
+                </Paper>
+                <Paper
+                  className="detail-item"
+                  elevation={0}
+                  size="small"
+                  sx={{ p: 1, minHeight: "auto" }}
+                >
+                  <Typography className="detail-label">
+                    Programa institucional
+                  </Typography>
+                  <Typography
+                    className="detail-value"
+                    sx={{
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2, // Cambia a 2 o más si quieres permitir más líneas antes del corte
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {toText(indicator.programaInstitucional?.titulo)}
+                  </Typography>
+                </Paper>
               </Box>
             </AccordionDetails>
           </Accordion>
@@ -1001,16 +1166,16 @@ const IndicatorsPage = ({ data, userInfo }) => {
         loading={busyId === "create"}
         dependencias={dependencias}
         desafios={desafios}
-      estrategiasConvergentes={estrategiasConvergentes}
-      estrategiasFacultad={estrategiasFacultad}
-      programasInstitucionales={programasInstitucionales}
-      indicadoresResultado={indicadoresResultado}
-      respondeAs={respondeAs}
-      usuarios={usuarios}
-      periodos={periodos}
-      metas={metas}
-      onClose={() => setCreateOpen(false)}
-      onSubmit={createIndicator}
+        estrategiasConvergentes={estrategiasConvergentes}
+        estrategiasFacultad={estrategiasFacultad}
+        programasInstitucionales={programasInstitucionales}
+        indicadoresResultado={indicadoresResultado}
+        respondeAs={respondeAs}
+        usuarios={usuarios}
+        periodos={periodos}
+        metas={metas}
+        onClose={() => setCreateOpen(false)}
+        onSubmit={createIndicator}
       />
 
       <EditModal
@@ -1019,18 +1184,17 @@ const IndicatorsPage = ({ data, userInfo }) => {
         indicator={editState.indicator}
         dependencias={dependencias}
         desafios={desafios}
-      estrategiasConvergentes={estrategiasConvergentes}
-      estrategiasFacultad={estrategiasFacultad}
-      programasInstitucionales={programasInstitucionales}
-      indicadoresResultado={indicadoresResultado}
-      respondeAs={respondeAs}
-      usuarios={usuarios}
-      metas={metas}
-      periodos={[]}
-      mode={canEditLogroOnly ? "logro" : "full"}
-      onClose={() => setEditState({ open: false, indicator: null })}
-      onSubmit={(payload) => updateIndicator(editState.indicator.id, payload)}
-    />
+        estrategiasConvergentes={estrategiasConvergentes}
+        estrategiasFacultad={estrategiasFacultad}
+        programasInstitucionales={programasInstitucionales}
+        indicadoresResultado={indicadoresResultado}
+        respondeAs={respondeAs}
+        usuarios={usuarios}
+        metas={metas}
+        periodos={[]}
+        onClose={() => setEditState({ open: false, indicator: null })}
+        onSubmit={(payload) => updateIndicator(editState.indicator.id, payload)}
+      />
 
       <ModalDetails
         open={detailsState.open}
@@ -1039,13 +1203,13 @@ const IndicatorsPage = ({ data, userInfo }) => {
         desafios={desafios}
         estrategiasConvergentes={estrategiasConvergentes}
         estrategiasFacultad={estrategiasFacultad}
-      programasInstitucionales={programasInstitucionales}
-      indicadoresResultado={indicadoresResultado}
-      respondeAs={respondeAs}
-      usuarios={usuarios}
-      periodos={periodos}
-      onClose={() => setDetailsState({ open: false, indicator: null })}
-    />
+        programasInstitucionales={programasInstitucionales}
+        indicadoresResultado={indicadoresResultado}
+        respondeAs={respondeAs}
+        usuarios={usuarios}
+        periodos={periodos}
+        onClose={() => setDetailsState({ open: false, indicator: null })}
+      />
     </Box>
   );
 };
