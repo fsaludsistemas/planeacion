@@ -33,7 +33,9 @@ import "../styles/indicators.css";
 
 const SHEET_NAME = "INDICADORES_PRODUCTO";
 const META_SHEET_NAME = "METAS";
+const EVIDENCES_SHEET_NAME = "EVIDENCIAS";
 const EVIDENCE_URL_FIELD = "url_documento_evidencia";
+const EVIDENCE_YEAR = 2026;
 const USERS_SHEET_NAME = "USUARIOS";
 const toText = (value) => String(value ?? "").trim() || "No disponible";
 const normalizeRole = (value) => normalize(value);
@@ -65,6 +67,20 @@ const matchesRespondeAFilter = (idRespondeA, filterValue, respondeAById) => {
   if (!filterValue) return true;
   const item = respondeAById.get(String(idRespondeA));
   return normalize(item?.nombre) === normalize(filterValue);
+};
+
+const isGoogleSheetsUrl = (value) => {
+  const url = String(value ?? "").trim();
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.hostname === "docs.google.com" &&
+      parsed.pathname.includes("/spreadsheets/d/")
+    );
+  } catch {
+    return false;
+  }
 };
 
 const IndicatorsPage = ({ data, userInfo }) => {
@@ -149,6 +165,10 @@ const IndicatorsPage = ({ data, userInfo }) => {
   );
   const metas = useMemo(() => sortById(getSheet(data, "METAS")), [data]);
   const avances = useMemo(() => sortById(getSheet(data, "AVANCES")), [data]);
+  const evidencias = useMemo(
+    () => sortById(getSheet(data, EVIDENCES_SHEET_NAME)),
+    [data],
+  );
 
   const byId = (items) => new Map(items.map((item) => [String(item.id), item]));
   const dependenciaById = useMemo(() => byId(dependencias), [dependencias]);
@@ -180,6 +200,20 @@ const IndicatorsPage = ({ data, userInfo }) => {
     () => new Map(avances.map((item) => [String(item.id_indicador), item])),
     [avances],
   );
+  const evidenciaByIndicatorId = useMemo(
+    () =>
+      new Map(
+        evidencias.map((item) => [String(item.id_indicador_producto), item]),
+      ),
+    [evidencias],
+  );
+  const nextEvidenceId = useMemo(() => {
+    const maxId = evidencias.reduce((max, item) => {
+      const current = Number(item?.id ?? 0);
+      return Number.isFinite(current) && current > max ? current : max;
+    }, 0);
+    return String(maxId + 1);
+  }, [evidencias]);
   const userById = useMemo(
     () => new Map(usuarios.map((item) => [String(item.id), item])),
     [usuarios],
@@ -466,8 +500,13 @@ const IndicatorsPage = ({ data, userInfo }) => {
   const getEvidenceUrl = (indicator) => {
     const storedValue = evidenceUrls[String(indicator.id)];
     if (storedValue !== undefined) return storedValue;
+    const evidencia = evidenciaByIndicatorId.get(String(indicator.id));
+    const yearKey = `url_${EVIDENCE_YEAR}`;
     return String(
-      indicator?.[EVIDENCE_URL_FIELD] ?? indicator?.urlDocumentoEvidencia ?? "",
+      evidencia?.[yearKey] ??
+        indicator?.[EVIDENCE_URL_FIELD] ??
+        indicator?.urlDocumentoEvidencia ??
+        "",
     );
   };
 
@@ -481,19 +520,51 @@ const IndicatorsPage = ({ data, userInfo }) => {
 
   const handleEvidenceUrlBlur = (indicator) => async () => {
     const nextValue = getEvidenceUrl(indicator).trim();
-    const currentValue = String(
-      indicator?.[EVIDENCE_URL_FIELD] ?? indicator?.urlDocumentoEvidencia ?? "",
-    ).trim();
+    if (!nextValue) return;
 
-    if (nextValue === currentValue) return;
+    if (!isGoogleSheetsUrl(nextValue)) {
+      setActionError("La URL de evidencia debe ser un enlace de Google Sheets.");
+      return;
+    }
+  };
 
-    await updateIndicator(
-      indicator.id,
-      {
-        [EVIDENCE_URL_FIELD]: nextValue,
-      },
-      { reload: false },
-    );
+  const handleLinkEvidence = async (indicator) => {
+    const nextValue = getEvidenceUrl(indicator).trim();
+    if (!nextValue) {
+      setActionError("Escribe una URL antes de vincularla.");
+      return;
+    }
+
+    if (!isGoogleSheetsUrl(nextValue)) {
+      setActionError("La URL de evidencia debe ser un enlace de Google Sheets.");
+      return;
+    }
+
+    setBusyId(`evidence-${indicator.id}`);
+    setActionError("");
+    try {
+      const yearKey = `url_${EVIDENCE_YEAR}`;
+      const evidenceRow = evidenciaByIndicatorId.get(String(indicator.id));
+      const payload = {
+        id: evidenceRow?.id ?? nextEvidenceId,
+        id_indicador_producto: String(indicator.id),
+        [yearKey]: nextValue,
+      };
+
+      if (evidenceRow?.id) {
+        await updateSheetRow(EVIDENCES_SHEET_NAME, evidenceRow.id, payload);
+      } else {
+        await createSheetRow(EVIDENCES_SHEET_NAME, payload);
+      }
+      window.location.reload();
+    } catch (error) {
+      setActionError(
+        error?.response?.data?.message ||
+          "No se pudo vincular la URL de evidencia.",
+      );
+    } finally {
+      setBusyId("");
+    }
   };
 
   const getLogroValue = (indicator) => {
@@ -995,14 +1066,23 @@ const IndicatorsPage = ({ data, userInfo }) => {
                   <Typography className="detail-label" sx={{ mb: 1 }}>
                     URL documento evidencia
                   </Typography>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    placeholder="URL del documento de evidencia"
-                    value={getEvidenceUrl(indicator)}
-                    onChange={handleEvidenceUrlChange(indicator.id)}
-                    onBlur={handleEvidenceUrlBlur(indicator)}
-                  />
+                  <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      placeholder="URL del documento de evidencia"
+                      value={getEvidenceUrl(indicator)}
+                      onChange={handleEvidenceUrlChange(indicator.id)}
+                      onBlur={handleEvidenceUrlBlur(indicator)}
+                    />
+                    <Button
+                      variant="contained"
+                      onClick={() => handleLinkEvidence(indicator)}
+                      disabled={busyId === `evidence-${indicator.id}`}
+                    >
+                      Vincular
+                    </Button>
+                  </Box>
                 </Box>
                 <Box sx={{ gridColumn: "1 / -1" }}>
                   <Typography className="detail-label" sx={{ mb: 1 }}>

@@ -175,178 +175,171 @@ const EditModal = ({
             </Grid>
           ) : (
             <>
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Nombre"
-              value={form.nombre}
-              onChange={handleChange("nombre")}
-            />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              multiline
-              minRows={4}
-              label="Objetivo escuela"
-              value={form.objetivo_escuela}
-              onChange={handleChange("objetivo_escuela")}
-            />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField
-              select
-              fullWidth
-              label="Dependencia"
-              value={form.id_dependencia}
-              onChange={handleChange("id_dependencia")}
-            >
-              {dependencias.map((item) => (
-                <MenuItem key={item.id} value={String(item.id)}>
-                  {toText(item.nombre)}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField
-              select
-              fullWidth
-              label="Responde a"
-              value={form.id_responde_a}
-              onChange={handleChange("id_responde_a")}
-            >
-              <MenuItem value="">Sin relacion</MenuItem>
-              {respondeAs.map((item) => (
-                <MenuItem key={item.id} value={String(item.id)}>
-                  {toText(item.nombre)}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField
-              select
-              fullWidth
-              label="Desafio"
-              value={form.id_desafio}
-              onChange={handleChange("id_desafio")}
-            >
-              {desafios.map((item) => (
-                <MenuItem key={item.id} value={String(item.id)}>
-                  {toText(item.titulo)}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField
-              select
-              fullWidth
-              label="Estrategia convergente"
-              value={form.id_estrategia_convergente}
-              onChange={handleChange("id_estrategia_convergente")}
-            >
-              <MenuItem value="">Sin relacion</MenuItem>
-              {convergenteOptions.map((item) => (
-                <MenuItem key={item.id} value={String(item.id)}>
-                  {toText(item.titulo)}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField
-              select
-              fullWidth
-              label="Estrategia facultad"
-              value={form.id_estrategia_facultad}
-              onChange={handleChange("id_estrategia_facultad")}
-            >
-              <MenuItem value="">Sin relacion</MenuItem>
-              {facultadOptions.map((item) => (
-                <MenuItem key={item.id} value={String(item.id)}>
-                  {toText(item.titulo)}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField
-              select
-              fullWidth
-              label="Programa institucional"
-              value={form.id_programa_inst}
-              onChange={handleChange("id_programa_inst")}
-            >
-              <MenuItem value="">Sin relacion</MenuItem>
-              {programaOptions.map((item) => (
-                <MenuItem key={item.id} value={String(item.id)}>
-                  {toText(item.titulo)}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField
-              select
-              fullWidth
-              label="Indicador resultado"
-              value={form.id_indicador_resultado}
-              onChange={handleChange("id_indicador_resultado")}
-            >
-              <MenuItem value="">Sin relacion</MenuItem>
-              {resultadoOptions.map((item) => (
-                <MenuItem key={item.id} value={String(item.id)}>
-                  {toText(item.nombre)}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField
-              fullWidth
-              multiline
-              minRows={4}
-              label="Logro (opcional)"
-              value={form.logro}
-              onChange={handleChange("logro")}
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField
-              select
-              fullWidth
-              label="Responsable"
-              value={form.responsable}
-              onChange={handleChange("responsable")}
-              disabled={!form.id_dependencia}
-            >
-              <MenuItem value="">Sin responsable</MenuItem>
-              {responsableOptions.map((item) => (
-                <MenuItem key={item.id} value={String(item.id)}>
-                  {toText(item.correo)}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <FormControlLabel
-              sx={{ mt: 1 }}
-              control={
-                <Checkbox
-                  checked={Boolean(form.suma_facultad)}
-                  onChange={(event) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      suma_facultad: event.target.checked,
-                    }))
-                  }
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  multiline
+                  minRows={4}
+                  label="Nombre"
+                  value={form.nombre}
+                  onChange={handleChange("nombre")}
                 />
-              }
-              label="Suma facultad"
-            />
-          </Grid>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  multiline
+                  minRows={4}
+                  label="Objetivo escuela"
+                  value={form.objetivo_escuela}
+                  onChange={handleChange("objetivo_escuela")}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  select
+                  fullWidth
+                  label="Dependencia"
+                  value={form.id_dependencia}
+                  onChange={handleChange("id_dependencia")}
+                >
+                  {dependencias.map((item) => (
+                    <MenuItem key={item.id} value={String(item.id)}>
+                      {toText(item.nombre)}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  select
+                  fullWidth
+                  label="Responde a"
+                  value={form.id_responde_a}
+                  onChange={handleChange("id_responde_a")}
+                >
+                  <MenuItem value="">Sin relacion</MenuItem>
+                  {respondeAs.map((item) => (
+                    <MenuItem key={item.id} value={String(item.id)}>
+                      {toText(item.nombre)}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  select
+                  fullWidth
+                  label="Desafio"
+                  value={form.id_desafio}
+                  onChange={handleChange("id_desafio")}
+                >
+                  {desafios.map((item) => (
+                    <MenuItem key={item.id} value={String(item.id)}>
+                      {toText(item.titulo)}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  select
+                  fullWidth
+                  label="Estrategia convergente"
+                  value={form.id_estrategia_convergente}
+                  onChange={handleChange("id_estrategia_convergente")}
+                >
+                  <MenuItem value="">Sin relacion</MenuItem>
+                  {convergenteOptions.map((item) => (
+                    <MenuItem key={item.id} value={String(item.id)}>
+                      {toText(item.titulo)}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  select
+                  fullWidth
+                  label="Estrategia facultad"
+                  value={form.id_estrategia_facultad}
+                  onChange={handleChange("id_estrategia_facultad")}
+                >
+                  <MenuItem value="">Sin relacion</MenuItem>
+                  {facultadOptions.map((item) => (
+                    <MenuItem key={item.id} value={String(item.id)}>
+                      {toText(item.titulo)}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  select
+                  fullWidth
+                  label="Programa institucional"
+                  value={form.id_programa_inst}
+                  onChange={handleChange("id_programa_inst")}
+                >
+                  <MenuItem value="">Sin relacion</MenuItem>
+                  {programaOptions.map((item) => (
+                    <MenuItem key={item.id} value={String(item.id)}>
+                      {toText(item.titulo)}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  select
+                  fullWidth
+                  label="Indicador resultado"
+                  value={form.id_indicador_resultado}
+                  onChange={handleChange("id_indicador_resultado")}
+                >
+                  <MenuItem value="">Sin relacion</MenuItem>
+                  {resultadoOptions.map((item) => (
+                    <MenuItem key={item.id} value={String(item.id)}>
+                      {toText(item.nombre)}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <TextField
+                  select
+                  fullWidth
+                  label="Responsable"
+                  value={form.responsable}
+                  onChange={handleChange("responsable")}
+                  disabled={!form.id_dependencia}
+                >
+                  <MenuItem value="">Sin responsable</MenuItem>
+                  {responsableOptions.map((item) => (
+                    <MenuItem key={item.id} value={String(item.id)}>
+                      {toText(item.correo)}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <FormControlLabel
+                  sx={{ mt: 1 }}
+                  control={
+                    <Checkbox
+                      checked={Boolean(form.suma_facultad)}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          suma_facultad: event.target.checked,
+                        }))
+                      }
+                    />
+                  }
+                  label="Suma facultad"
+                />
+              </Grid>
             </>
           )}
         </Grid>
