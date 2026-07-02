@@ -5,8 +5,12 @@ import {
   AccordionSummary,
   Box,
   Button,
+  Dialog,
+  DialogContent,
+  DialogTitle,
   FormControl,
   FormControlLabel,
+  IconButton,
   Input,
   InputLabel,
   MenuItem,
@@ -21,10 +25,12 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import AddIcon from "@mui/icons-material/Add";
+import CloseIcon from "@mui/icons-material/Close";
 import CreateIndicator from "../components/CreateIndicator";
 import EditModal from "../components/EditModal";
 import ModalDetails from "../components/ModalDetails";
@@ -37,7 +43,7 @@ const EVIDENCES_SHEET_NAME = "EVIDENCIAS";
 const EVIDENCE_URL_FIELD = "url_documento_evidencia";
 const EVIDENCE_YEAR = 2026;
 const USERS_SHEET_NAME = "USUARIOS";
-const toText = (value) => String(value ?? "").trim() || "No disponible";
+const toText = (value) => String(value ?? "").trim() || "-";
 const normalizeRole = (value) => normalize(value);
 const normalize = (value) =>
   String(value ?? "")
@@ -83,6 +89,26 @@ const isGoogleSheetsUrl = (value) => {
   }
 };
 
+const getSheetEmbedUrl = (value) => {
+  const url = String(value ?? "").trim();
+  if (!url) return "";
+
+  try {
+    const parsed = new URL(url);
+    if (
+      parsed.hostname === "docs.google.com" &&
+      parsed.pathname.includes("/spreadsheets/d/")
+    ) {
+      parsed.searchParams.set("rm", "minimal");
+      return parsed.toString();
+    }
+  } catch {
+    return url;
+  }
+
+  return url;
+};
+
 const IndicatorsPage = ({ data, userInfo }) => {
   const [filters, setFilters] = useState({
     dependencia: "",
@@ -105,6 +131,11 @@ const IndicatorsPage = ({ data, userInfo }) => {
   const [busyId, setBusyId] = useState("");
   const [evidenceUrls, setEvidenceUrls] = useState({});
   const [logroValues, setLogroValues] = useState({});
+  const [sheetModalState, setSheetModalState] = useState({
+    open: false,
+    url: "",
+    indicatorName: "",
+  });
   const logroSaveTimersRef = useRef({});
 
   useEffect(() => {
@@ -541,6 +572,10 @@ const IndicatorsPage = ({ data, userInfo }) => {
     } finally {
       setBusyId("");
     }
+  };
+
+  const closeSheetModal = () => {
+    setSheetModalState({ open: false, url: "", indicatorName: "" });
   };
 
   const getLogroValue = (indicator) => {
@@ -1050,14 +1085,40 @@ const IndicatorsPage = ({ data, userInfo }) => {
                       value={getEvidenceUrl(indicator)}
                       onChange={handleEvidenceUrlChange(indicator.id)}
                       onBlur={handleEvidenceUrlBlur(indicator)}
+                      disabled={!canEditAllIndicators}
                     />
-                    <Button
-                      variant="contained"
-                      onClick={() => handleLinkEvidence(indicator)}
-                      disabled={busyId === `evidence-${indicator.id}`}
-                    >
-                      Vincular
-                    </Button>
+                    {canEditAllIndicators && (
+                      <Tooltip title="Vincular URL de evidencia">
+                        <span>
+                          <Button
+                            variant="contained"
+                            onClick={() => handleLinkEvidence(indicator)}
+                            disabled={busyId === `evidence-${indicator.id}`}
+                          >
+                            Vincular
+                          </Button>
+                        </span>
+                      </Tooltip>
+                    )}
+                    {canEditAllIndicators &&
+                      isGoogleSheetsUrl(getEvidenceUrl(indicator)) && (
+                        <Tooltip title="Abrir sheet de evidencia">
+                          <span>
+                            <Button
+                              variant="outlined"
+                              onClick={() =>
+                                setSheetModalState({
+                                  open: true,
+                                  url: getEvidenceUrl(indicator),
+                                  indicatorName: toText(indicator.nombre),
+                                })
+                              }
+                            >
+                              Ver Sheet
+                            </Button>
+                          </span>
+                        </Tooltip>
+                      )}
                   </Box>
                 </Box>
                 <Box sx={{ gridColumn: "1 / -1" }}>
@@ -1266,6 +1327,55 @@ const IndicatorsPage = ({ data, userInfo }) => {
         periodos={periodos}
         onClose={() => setDetailsState({ open: false, indicator: null })}
       />
+
+      <Dialog
+        open={sheetModalState.open}
+        onClose={closeSheetModal}
+        fullWidth
+        maxWidth={false}
+        PaperProps={{
+          sx: {
+            width: "min(96vw, 1500px)",
+            height: "min(92vh, 920px)",
+          },
+        }}
+      >
+        <DialogTitle sx={{ pr: 8 }}>
+          {sheetModalState.indicatorName || "Sheet de evidencia"}
+        </DialogTitle>
+        <IconButton
+          aria-label="Cerrar sheet"
+          onClick={closeSheetModal}
+          sx={{ position: "absolute", top: 10, right: 10, zIndex: 1 }}
+        >
+          <CloseIcon />
+        </IconButton>
+        <DialogContent sx={{ p: 0, height: "100%" }}>
+          <Box
+            sx={{
+              position: "relative",
+              width: "100%",
+              height: "100%",
+              overflow: "hidden",
+              bgcolor: "grey.100",
+            }}
+          >
+            <iframe
+              title={sheetModalState.indicatorName || "Sheet de evidencia"}
+              src={getSheetEmbedUrl(sheetModalState.url)}
+              style={{
+                position: "absolute",
+                top: "-24px",
+                left: "-44px",
+                width: "calc(101.1% + 44px)",
+                height: "calc(150% + 24px)",
+                border: "none",
+              }}
+              loading="lazy"
+            />
+          </Box>
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 };
