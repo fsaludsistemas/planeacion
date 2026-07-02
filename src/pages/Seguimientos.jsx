@@ -221,84 +221,79 @@ const Seguimientos = ({ data, userInfo }) => {
     }
   }, [canSeeAll, userDependencyId]);
 
-  const filterableIndicators = useMemo(() => {
+  const matchesFilter = (indicator, field, value) => {
+    if (!value) return true;
+    switch (field) {
+      case "dependency":
+        return String(indicator.id_dependencia || "") === value;
+      case "tipoDependencia":
+        return matchesTipoDependenciaFilter(
+          indicator.id_dependencia,
+          value,
+          tipoDependenciaById,
+        );
+      case "respondeA":
+        return matchesRespondeAFilter(
+          indicator.id_responde_a,
+          value,
+          respondeAById,
+        );
+      case "desafio":
+        return String(indicator.id_desafio || "") === value;
+      case "convergente":
+        return String(indicator.id_estrategia_convergente || "") === value;
+      case "facultad":
+        return String(indicator.id_estrategia_facultad || "") === value;
+      case "programa":
+        return String(indicator.id_programa_inst || "") === value;
+      case "resultado":
+        return String(indicator.id_indicador_resultado || "") === value;
+      default:
+        return true;
+    }
+  };
+
+  const getIndicatorsExcept = (excludeField) => {
     return indicators.filter((indicator) => {
       if (!canSeeAll && userDependencyId) {
         if (String(indicator.id_dependencia || "") !== userDependencyId) {
           return false;
         }
       }
-      if (
-        selectedDependency &&
-        String(indicator.id_dependencia || "") !== selectedDependency
-      ) {
-        return false;
-      }
-      if (
-        selectedDesafio &&
-        String(indicator.id_desafio || "") !== selectedDesafio
-      ) {
-        return false;
-      }
-      if (
-        selectedTipoDependencia &&
-        !matchesTipoDependenciaFilter(
-          indicator.id_dependencia,
-          selectedTipoDependencia,
-          tipoDependenciaById,
-        )
-      ) {
-        return false;
-      }
-      if (
-        !matchesRespondeAFilter(
-          indicator.id_responde_a,
-          selectedRespondeA,
-          respondeAById,
-        )
-      ) {
-        return false;
-      }
-      if (
-        selectedConvergente &&
-        String(indicator.id_estrategia_convergente || "") !==
-          selectedConvergente
-      ) {
-        return false;
-      }
-      if (
-        selectedFacultad &&
-        String(indicator.id_estrategia_facultad || "") !== selectedFacultad
-      ) {
-        return false;
-      }
-      if (
-        selectedPrograma &&
-        String(indicator.id_programa_inst || "") !== selectedPrograma
-      ) {
-        return false;
-      }
-      if (
-        selectedResultado &&
-        String(indicator.id_indicador_resultado || "") !== selectedResultado
-      ) {
-        return false;
+      const filterValues = {
+        dependency: selectedDependency,
+        tipoDependencia: selectedTipoDependencia,
+        respondeA: selectedRespondeA,
+        desafio: selectedDesafio,
+        convergente: selectedConvergente,
+        facultad: selectedFacultad,
+        programa: selectedPrograma,
+        resultado: selectedResultado,
+      };
+      for (const [field, value] of Object.entries(filterValues)) {
+        if (field === excludeField) continue;
+        if (!matchesFilter(indicator, field, value)) {
+          return false;
+        }
       }
       return true;
     });
+  };
+
+  const filterableIndicators = useMemo(() => {
+    return getIndicatorsExcept(null);
   }, [
     indicators,
-    canSeeAll,
-    userDependencyId,
     selectedDependency,
     selectedTipoDependencia,
-    selectedDesafio,
     selectedRespondeA,
+    selectedDesafio,
     selectedConvergente,
     selectedFacultad,
     selectedPrograma,
     selectedResultado,
-    respondeAById,
+    canSeeAll,
+    userDependencyId,
   ]);
 
   const rowsByDesafio = useMemo(() => {
@@ -332,78 +327,171 @@ const Seguimientos = ({ data, userInfo }) => {
   ]);
 
   const dependencyOptions = useMemo(() => {
-    const ids = new Set(
-      filterableIndicators.map((item) => String(item.id_dependencia || "")),
-    );
+    const rows = getIndicatorsExcept("dependency");
+    const ids = new Set(rows.map((item) => String(item.id_dependencia || "")));
     return dependencias.filter((item) => ids.has(String(item.id)));
-  }, [dependencias, filterableIndicators]);
+  }, [
+    dependencias,
+    indicators,
+    selectedTipoDependencia,
+    selectedRespondeA,
+    selectedDesafio,
+    selectedConvergente,
+    selectedFacultad,
+    selectedPrograma,
+    selectedResultado,
+    canSeeAll,
+    userDependencyId,
+  ]);
 
   const desafioOptions = useMemo(() => {
-    const ids = new Set(
-      filterableIndicators.map((item) => String(item.id_desafio || "")),
-    );
+    const rows = getIndicatorsExcept("desafio");
+    const ids = new Set(rows.map((item) => String(item.id_desafio || "")));
     return desafios.filter((item) => ids.has(String(item.id)));
-  }, [desafios, filterableIndicators]);
+  }, [
+    desafios,
+    indicators,
+    selectedDependency,
+    selectedTipoDependencia,
+    selectedRespondeA,
+    selectedConvergente,
+    selectedFacultad,
+    selectedPrograma,
+    selectedResultado,
+    canSeeAll,
+    userDependencyId,
+  ]);
 
   const convergenteOptions = useMemo(() => {
-    const ids = selectedDesafio
-      ? [selectedDesafio]
-      : [
-          ...new Set(
-            filterableIndicators.map((item) => String(item.id_desafio || "")),
-          ).values(),
-        ];
-    return estrategiasConvergentes.filter((item) =>
-      ids.includes(String(item.id_desafio || "")),
+    const rows = getIndicatorsExcept("convergente");
+    const ids = new Set(
+      rows.map((item) => String(item.id_estrategia_convergente || "")),
     );
-  }, [estrategiasConvergentes, filterableIndicators, selectedDesafio]);
+    return estrategiasConvergentes.filter((item) => ids.has(String(item.id)));
+  }, [
+    estrategiasConvergentes,
+    indicators,
+    selectedDependency,
+    selectedTipoDependencia,
+    selectedRespondeA,
+    selectedDesafio,
+    selectedFacultad,
+    selectedPrograma,
+    selectedResultado,
+    canSeeAll,
+    userDependencyId,
+  ]);
 
   const facultadOptions = useMemo(() => {
-    const ids = selectedConvergente
-      ? [selectedConvergente]
-      : [
-          ...new Set(
-            filterableIndicators.map((item) =>
-              String(item.id_estrategia_convergente || ""),
-            ),
-          ).values(),
-        ];
-    return estrategiasFacultad.filter((item) =>
-      ids.includes(
-        String(item.id_estrategia_convergente || item.id_convergente || ""),
-      ),
+    const rows = getIndicatorsExcept("facultad");
+    const ids = new Set(
+      rows.map((item) => String(item.id_estrategia_facultad || "")),
     );
-  }, [estrategiasFacultad, filterableIndicators, selectedConvergente]);
+    return estrategiasFacultad.filter((item) => ids.has(String(item.id)));
+  }, [
+    estrategiasFacultad,
+    indicators,
+    selectedDependency,
+    selectedTipoDependencia,
+    selectedRespondeA,
+    selectedDesafio,
+    selectedConvergente,
+    selectedPrograma,
+    selectedResultado,
+    canSeeAll,
+    userDependencyId,
+  ]);
 
   const programaOptions = useMemo(() => {
-    const ids = selectedFacultad
-      ? [selectedFacultad]
-      : [
-          ...new Set(
-            filterableIndicators.map((item) =>
-              String(item.id_estrategia_facultad || ""),
-            ),
-          ).values(),
-        ];
-    return programasInstitucionales.filter((item) =>
-      ids.includes(String(item.id_estrategia_facultad || "")),
-    );
-  }, [programasInstitucionales, filterableIndicators, selectedFacultad]);
+    const rows = getIndicatorsExcept("programa");
+    const ids = new Set(rows.map((item) => String(item.id_programa_inst || "")));
+    return programasInstitucionales.filter((item) => ids.has(String(item.id)));
+  }, [
+    programasInstitucionales,
+    indicators,
+    selectedDependency,
+    selectedTipoDependencia,
+    selectedRespondeA,
+    selectedDesafio,
+    selectedConvergente,
+    selectedFacultad,
+    selectedResultado,
+    canSeeAll,
+    userDependencyId,
+  ]);
 
   const resultadoOptions = useMemo(() => {
-    const ids = selectedPrograma
-      ? [selectedPrograma]
-      : [
-          ...new Set(
-            filterableIndicators.map((item) =>
-              String(item.id_programa_inst || ""),
-            ),
-          ).values(),
-        ];
-    return indicadoresResultado.filter((item) =>
-      ids.includes(String(item.id_programa_inst || "")),
+    const rows = getIndicatorsExcept("resultado");
+    const ids = new Set(
+      rows.map((item) => String(item.id_indicador_resultado || "")),
     );
-  }, [indicadoresResultado, filterableIndicators, selectedPrograma]);
+    return indicadoresResultado.filter((item) => ids.has(String(item.id)));
+  }, [
+    indicadoresResultado,
+    indicators,
+    selectedDependency,
+    selectedTipoDependencia,
+    selectedRespondeA,
+    selectedDesafio,
+    selectedConvergente,
+    selectedFacultad,
+    selectedPrograma,
+    canSeeAll,
+    userDependencyId,
+  ]);
+
+  // Clear incompatible filter values when options change
+  useEffect(() => {
+    if (
+      selectedDependency &&
+      !dependencyOptions.some((d) => String(d.id) === selectedDependency)
+    ) {
+      setSelectedDependency("");
+    }
+    if (
+      selectedDesafio &&
+      !desafioOptions.some((d) => String(d.id) === selectedDesafio)
+    ) {
+      setSelectedDesafio("");
+    }
+    if (
+      selectedConvergente &&
+      !convergenteOptions.some((d) => String(d.id) === selectedConvergente)
+    ) {
+      setSelectedConvergente("");
+    }
+    if (
+      selectedFacultad &&
+      !facultadOptions.some((d) => String(d.id) === selectedFacultad)
+    ) {
+      setSelectedFacultad("");
+    }
+    if (
+      selectedPrograma &&
+      !programaOptions.some((d) => String(d.id) === selectedPrograma)
+    ) {
+      setSelectedPrograma("");
+    }
+    if (
+      selectedResultado &&
+      !resultadoOptions.some((d) => String(d.id) === selectedResultado)
+    ) {
+      setSelectedResultado("");
+    }
+  }, [
+    dependencyOptions,
+    desafioOptions,
+    convergenteOptions,
+    facultadOptions,
+    programaOptions,
+    resultadoOptions,
+    selectedDependency,
+    selectedDesafio,
+    selectedConvergente,
+    selectedFacultad,
+    selectedPrograma,
+    selectedResultado,
+  ]);
 
   const clearFilters = () => {
     setSelectedDependency(canSeeAll ? "" : userDependencyId);
@@ -651,14 +739,15 @@ const Seguimientos = ({ data, userInfo }) => {
     });
 
     // Agregar página para resumen si es necesario
-    const lastY = doc.lastAutoTable?.finalY || yPosition;
-    if (lastY + 60 > doc.internal.pageSize.height) {
+    let lastY = doc.lastAutoTable?.finalY || yPosition;
+    if (lastY + 50 > doc.internal.pageSize.height) {
       doc.addPage();
+      lastY = 15;
     }
 
     // Resumen
-    const summaryY = lastY + 15;
-    doc.setFontSize(14);
+    const summaryY = lastY + 10;
+    doc.setFontSize(12);
     doc.setTextColor(0, 0, 0);
     doc.text("Resumen", 20, summaryY);
 
@@ -671,7 +760,7 @@ const Seguimientos = ({ data, userInfo }) => {
       ]),
     ];
 
-    const summaryStartY = summaryY + 5;
+    const summaryStartY = summaryY + 4;
     autoTable(doc, {
       startY: summaryStartY,
       head: [["Concepto", "Cantidad"]],
@@ -688,13 +777,95 @@ const Seguimientos = ({ data, userInfo }) => {
       },
     });
 
+    let currentY = doc.lastAutoTable?.finalY + 10;
+
+    // Verificar si el gráfico de torta + la tabla de colores caben, de lo contrario agregar página
+    if (currentY + 95 > doc.internal.pageSize.height) {
+      doc.addPage();
+      currentY = 20;
+    }
+
+    // Dibujar título del gráfico de torta
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
+    doc.text("Cumplimiento General", 20, currentY);
+    currentY += 5;
+
+    // Generar gráfico de torta en canvas
+    const canvas = document.createElement("canvas");
+    canvas.width = 400;
+    canvas.height = 200;
+    const ctx = canvas.getContext("2d");
+
+    // Fondo blanco
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, 400, 200);
+
+    const cx = 100;
+    const cy = 100;
+    const radius = 80;
+    const promedio = totals.promedio || 0;
+    const pending = totals.pending || 0;
+    const totalVal = promedio + pending || 100;
+    const executedAngle = (promedio / totalVal) * 2 * Math.PI;
+
+    // Porcentaje ejecutado (verde)
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + executedAngle);
+    ctx.closePath();
+    ctx.fillStyle = "#4CAF50";
+    ctx.fill();
+
+    // Porcentaje pendiente (rojo)
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, radius, -Math.PI / 2 + executedAngle, 1.5 * Math.PI);
+    ctx.closePath();
+    ctx.fillStyle = "#F44336";
+    ctx.fill();
+
+    // Líneas divisorias blancas
+    if (promedio > 0 && pending > 0) {
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + radius * Math.cos(-Math.PI / 2), cy + radius * Math.sin(-Math.PI / 2));
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + radius * Math.cos(-Math.PI / 2 + executedAngle), cy + radius * Math.sin(-Math.PI / 2 + executedAngle));
+      ctx.stroke();
+    }
+
+    // Leyenda
+    const lx = 220;
+    const ly = 80;
+
+    ctx.fillStyle = "#4CAF50";
+    ctx.fillRect(lx, ly, 15, 15);
+    ctx.fillStyle = "#000000";
+    ctx.font = "bold 13px sans-serif";
+    ctx.fillText(`Ejecutado (${promedio.toFixed(1).replace(".", ",")}%)${promedio > 0 ? "" : " - 0%"}`, lx + 22, ly + 12);
+
+    ctx.fillStyle = "#F44336";
+    ctx.fillRect(lx, ly + 25, 15, 15);
+    ctx.fillStyle = "#000000";
+    ctx.font = "bold 13px sans-serif";
+    ctx.fillText(`Pendiente (${pending.toFixed(1).replace(".", ",")}%)${pending > 0 ? "" : " - 0%"}`, lx + 22, ly + 37);
+
+    const chartImgData = canvas.toDataURL("image/png");
+    doc.addImage(chartImgData, "PNG", 20, currentY, 100, 50);
+    currentY += 55;
+
     // Contador de indicadores por color
-    const colorStartY = doc.lastAutoTable?.finalY + 10 || summaryStartY + 30;
     doc.setFontSize(12);
     doc.text(
       "Contador de indicadores y significado de colores",
       20,
-      colorStartY,
+      currentY,
     );
 
     const colorData = [
@@ -709,7 +880,7 @@ const Seguimientos = ({ data, userInfo }) => {
     ];
 
     autoTable(doc, {
-      startY: colorStartY + 5,
+      startY: currentY + 4,
       head: [["Rango", "Cantidad", "Color"]],
       body: colorData,
       theme: "grid",
@@ -723,7 +894,6 @@ const Seguimientos = ({ data, userInfo }) => {
         fontStyle: "bold",
       },
       didDrawCell: function (data) {
-        // Colorear celdas de "Color"
         if (data.column.index === 2 && data.row.index < colorData.length) {
           const colorName = data.cell.raw.toLowerCase();
           let bgColor;
@@ -741,7 +911,6 @@ const Seguimientos = ({ data, userInfo }) => {
               data.cell.height,
               "F",
             );
-            // Redibujar texto
             doc.setTextColor(0, 0, 0);
             const textX = data.cell.x + data.cell.width / 2;
             const textY = data.cell.y + data.cell.height / 2 + 2;
