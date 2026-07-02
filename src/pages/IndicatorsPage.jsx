@@ -5,8 +5,12 @@ import {
   AccordionSummary,
   Box,
   Button,
+  Dialog,
+  DialogContent,
+  DialogTitle,
   FormControl,
   FormControlLabel,
+  IconButton,
   Input,
   InputLabel,
   MenuItem,
@@ -21,10 +25,12 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import AddIcon from "@mui/icons-material/Add";
+import CloseIcon from "@mui/icons-material/Close";
 import CreateIndicator from "../components/CreateIndicator";
 import EditModal from "../components/EditModal";
 import ModalDetails from "../components/ModalDetails";
@@ -37,7 +43,7 @@ const EVIDENCES_SHEET_NAME = "EVIDENCIAS";
 const EVIDENCE_URL_FIELD = "url_documento_evidencia";
 const EVIDENCE_YEAR = 2026;
 const USERS_SHEET_NAME = "USUARIOS";
-const toText = (value) => String(value ?? "").trim() || "No disponible";
+const toText = (value) => String(value ?? "").trim() || "-";
 const normalizeRole = (value) => normalize(value);
 const normalize = (value) =>
   String(value ?? "")
@@ -83,6 +89,26 @@ const isGoogleSheetsUrl = (value) => {
   }
 };
 
+const getSheetEmbedUrl = (value) => {
+  const url = String(value ?? "").trim();
+  if (!url) return "";
+
+  try {
+    const parsed = new URL(url);
+    if (
+      parsed.hostname === "docs.google.com" &&
+      parsed.pathname.includes("/spreadsheets/d/")
+    ) {
+      parsed.searchParams.set("rm", "minimal");
+      return parsed.toString();
+    }
+  } catch {
+    return url;
+  }
+
+  return url;
+};
+
 const IndicatorsPage = ({ data, userInfo }) => {
   const [filters, setFilters] = useState({
     dependencia: "",
@@ -105,6 +131,11 @@ const IndicatorsPage = ({ data, userInfo }) => {
   const [busyId, setBusyId] = useState("");
   const [evidenceUrls, setEvidenceUrls] = useState({});
   const [logroValues, setLogroValues] = useState({});
+  const [sheetModalState, setSheetModalState] = useState({
+    open: false,
+    url: "",
+    indicatorName: "",
+  });
   const logroSaveTimersRef = useRef({});
 
   useEffect(() => {
@@ -272,89 +303,101 @@ const IndicatorsPage = ({ data, userInfo }) => {
     );
   }, [baseRows, isAdminOrSystems, userDependencyId]);
 
-  const filterOptions = useMemo(() => {
-    const scopedRows =
-      filters.tipoDependencia === "TODAS"
-        ? visibleRows
-        : visibleRows.filter(
-            (row) =>
-              getTipoDependencia(row.dependencia) === filters.tipoDependencia,
-          );
-    const dependencyIds = new Set(
-      scopedRows.map((row) => String(row.id_dependencia || "")),
-    );
-    const respondeAIds = new Set(
-      scopedRows.map((row) => String(row.id_responde_a || "")),
-    );
-    const desafioIds = new Set(
-      scopedRows.map((row) => String(row.id_desafio || "")),
-    );
+  // Helper: apply all active filters to visibleRows EXCEPT the named field,
+  // so each dropdown only shows options that are reachable given the other filters.
+  const getRowsExcept = (excludeField) => {
+    return visibleRows.filter((row) => {
+      if (
+        excludeField !== "dependencia" &&
+        filters.dependencia &&
+        String(row.id_dependencia || "") !== filters.dependencia
+      ) return false;
 
-    const convergenteScopeRows = filters.desafio
-      ? scopedRows.filter(
-          (row) => String(row.id_desafio || "") === filters.desafio,
-        )
-      : scopedRows;
-    const convergenteIds = new Set(
-      convergenteScopeRows.map((row) =>
-        String(row.id_estrategia_convergente || ""),
-      ),
-    );
-    const facultadScopeRows = filters.estrategiaConvergente
-      ? scopedRows.filter(
-          (row) =>
-            String(row.id_estrategia_convergente || "") ===
-            filters.estrategiaConvergente,
-        )
-      : convergenteScopeRows;
-    const facultadIds = new Set(
-      facultadScopeRows.map((row) => String(row.id_estrategia_facultad || "")),
-    );
-    const programaScopeRows = filters.estrategiaFacultad
-      ? scopedRows.filter(
-          (row) =>
-            String(row.id_estrategia_facultad || "") ===
-            filters.estrategiaFacultad,
-        )
-      : facultadScopeRows;
-    const resultScopeRows = filters.programaInstitucional
-      ? scopedRows.filter(
-          (row) =>
-            String(row.id_programa_inst || "") ===
-            filters.programaInstitucional,
-        )
-      : programaScopeRows;
-    const programaIds = new Set(
-      programaScopeRows.map((row) => String(row.id_programa_inst || "")),
-    );
+      if (
+        excludeField !== "tipoDependencia" &&
+        filters.tipoDependencia !== "TODAS" &&
+        getTipoDependencia(row.dependencia) !== filters.tipoDependencia
+      ) return false;
+
+      if (
+        excludeField !== "respondeA" &&
+        !matchesRespondeAFilter(row.id_responde_a, filters.respondeA, respondeAById)
+      ) return false;
+
+      if (
+        excludeField !== "desafio" &&
+        filters.desafio &&
+        String(row.id_desafio || "") !== filters.desafio
+      ) return false;
+
+      if (
+        excludeField !== "estrategiaConvergente" &&
+        filters.estrategiaConvergente &&
+        String(row.id_estrategia_convergente || "") !== filters.estrategiaConvergente
+      ) return false;
+
+      if (
+        excludeField !== "estrategiaFacultad" &&
+        filters.estrategiaFacultad &&
+        String(row.id_estrategia_facultad || "") !== filters.estrategiaFacultad
+      ) return false;
+
+      if (
+        excludeField !== "programaInstitucional" &&
+        filters.programaInstitucional &&
+        String(row.id_programa_inst || "") !== filters.programaInstitucional
+      ) return false;
+
+      if (
+        excludeField !== "indicadorResultado" &&
+        filters.indicadorResultado &&
+        String(row.id_indicador_resultado || "") !== filters.indicadorResultado
+      ) return false;
+
+      return true;
+    });
+  };
+
+  const filterOptions = useMemo(() => {
+    const depRows    = getRowsExcept("dependencia");
+    const raRows     = getRowsExcept("respondeA");
+    const desRows    = getRowsExcept("desafio");
+    const convRows   = getRowsExcept("estrategiaConvergente");
+    const facRows    = getRowsExcept("estrategiaFacultad");
+    const progRows   = getRowsExcept("programaInstitucional");
+    const resRows    = getRowsExcept("indicadorResultado");
+
+    const ids = (arr, key) => new Set(arr.map((r) => String(r[key] || "")));
+
     return {
       dependencias: sortById(
-        dependencias.filter((item) => dependencyIds.has(String(item.id))),
+        dependencias.filter((item) => ids(depRows, "id_dependencia").has(String(item.id))),
       ),
       respondeAs: sortById(
-        respondeAs.filter((item) => respondeAIds.has(String(item.id))),
+        respondeAs.filter((item) => ids(raRows, "id_responde_a").has(String(item.id))),
       ),
       desafios: sortById(
-        desafios.filter((item) => desafioIds.has(String(item.id))),
+        desafios.filter((item) => ids(desRows, "id_desafio").has(String(item.id))),
       ),
       estrategiasConvergentes: sortById(
         estrategiasConvergentes.filter((item) =>
-          convergenteIds.has(String(item.id)),
+          ids(convRows, "id_estrategia_convergente").has(String(item.id)),
         ),
       ),
       estrategiasFacultad: sortById(
-        estrategiasFacultad.filter((item) => facultadIds.has(String(item.id))),
+        estrategiasFacultad.filter((item) =>
+          ids(facRows, "id_estrategia_facultad").has(String(item.id)),
+        ),
       ),
       programasInstitucionales: sortById(
         programasInstitucionales.filter((item) =>
-          programaIds.has(String(item.id)),
+          ids(progRows, "id_programa_inst").has(String(item.id)),
         ),
       ),
       indicadoresResultado: sortById(
         indicadoresResultado.filter((item) =>
-          resultScopeRows.some(
-            (row) =>
-              String(row.id_indicador_resultado || "") === String(item.id),
+          resRows.some(
+            (row) => String(row.id_indicador_resultado || "") === String(item.id),
           ),
         ),
       ),
@@ -368,66 +411,49 @@ const IndicatorsPage = ({ data, userInfo }) => {
     estrategiasFacultad,
     programasInstitucionales,
     indicadoresResultado,
-    filters.tipoDependencia,
-    filters.desafio,
-    filters.estrategiaConvergente,
-    filters.estrategiaFacultad,
-    filters.programaInstitucional,
+    filters,
+    respondeAById,
   ]);
 
-  const filteredRows = useMemo(() => {
-    return visibleRows.filter((row) => {
+  // Auto-clear filter values that are no longer present in the computed options
+  useEffect(() => {
+    setFilters((prev) => {
+      let changed = false;
+      const next = { ...prev };
+
       if (
-        filters.dependencia &&
-        String(row.id_dependencia) !== filters.dependencia
-      ) {
-        return false;
-      }
+        next.dependencia &&
+        !filterOptions.dependencias.some((d) => String(d.id) === next.dependencia)
+      ) { next.dependencia = ""; changed = true; }
+
       if (
-        filters.tipoDependencia !== "TODAS" &&
-        getTipoDependencia(row.dependencia) !== filters.tipoDependencia
-      ) {
-        return false;
-      }
+        next.desafio &&
+        !filterOptions.desafios.some((d) => String(d.id) === next.desafio)
+      ) { next.desafio = ""; changed = true; }
+
       if (
-        !matchesRespondeAFilter(
-          row.id_responde_a,
-          filters.respondeA,
-          respondeAById,
-        )
-      ) {
-        return false;
-      }
-      if (filters.desafio && String(row.id_desafio) !== filters.desafio) {
-        return false;
-      }
+        next.estrategiaConvergente &&
+        !filterOptions.estrategiasConvergentes.some((d) => String(d.id) === next.estrategiaConvergente)
+      ) { next.estrategiaConvergente = ""; changed = true; }
+
       if (
-        filters.estrategiaConvergente &&
-        String(row.id_estrategia_convergente) !== filters.estrategiaConvergente
-      ) {
-        return false;
-      }
+        next.estrategiaFacultad &&
+        !filterOptions.estrategiasFacultad.some((d) => String(d.id) === next.estrategiaFacultad)
+      ) { next.estrategiaFacultad = ""; changed = true; }
+
       if (
-        filters.estrategiaFacultad &&
-        String(row.id_estrategia_facultad) !== filters.estrategiaFacultad
-      ) {
-        return false;
-      }
+        next.programaInstitucional &&
+        !filterOptions.programasInstitucionales.some((d) => String(d.id) === next.programaInstitucional)
+      ) { next.programaInstitucional = ""; changed = true; }
+
       if (
-        filters.programaInstitucional &&
-        String(row.id_programa_inst) !== filters.programaInstitucional
-      ) {
-        return false;
-      }
-      if (
-        filters.indicadorResultado &&
-        String(row.id_indicador_resultado) !== filters.indicadorResultado
-      ) {
-        return false;
-      }
-      return true;
+        next.indicadorResultado &&
+        !filterOptions.indicadoresResultado.some((d) => String(d.id) === next.indicadorResultado)
+      ) { next.indicadorResultado = ""; changed = true; }
+
+      return changed ? next : prev;
     });
-  }, [visibleRows, filters, respondeAById]);
+  }, [filterOptions]);
 
   const clearFilters = () => {
     setFilters({
@@ -443,37 +469,18 @@ const IndicatorsPage = ({ data, userInfo }) => {
     setExpandedId(null);
   };
 
-  const resetBelow = (field, next) => {
-    const updated = { ...next };
-    if (field === "tipoDependencia") {
-      updated.dependencia = "";
-    }
-    if (field === "desafio") {
-      updated.estrategiaConvergente = "";
-      updated.estrategiaFacultad = "";
-      updated.programaInstitucional = "";
-      updated.indicadorResultado = "";
-    }
-    if (field === "estrategiaConvergente") {
-      updated.estrategiaFacultad = "";
-      updated.programaInstitucional = "";
-      updated.indicadorResultado = "";
-    }
-    if (field === "estrategiaFacultad") {
-      updated.programaInstitucional = "";
-      updated.indicadorResultado = "";
-    }
-    if (field === "programaInstitucional") {
-      updated.indicadorResultado = "";
-    }
-    return updated;
-  };
-
   const handleFilterChange = (field) => (event) => {
     const value = event.target.value;
-    setFilters((prev) => resetBelow(field, { ...prev, [field]: value }));
+    setFilters((prev) => ({ ...prev, [field]: value }));
     setExpandedId(null);
   };
+
+  // filteredRows: visibleRows with ALL filters applied (used by JSX to render the list)
+  const filteredRows = useMemo(
+    () => getRowsExcept(null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [visibleRows, filters, respondeAById],
+  );
 
   const updateIndicator = async (id, payload, { reload = true } = {}) => {
     setBusyId(String(id));
@@ -565,6 +572,10 @@ const IndicatorsPage = ({ data, userInfo }) => {
     } finally {
       setBusyId("");
     }
+  };
+
+  const closeSheetModal = () => {
+    setSheetModalState({ open: false, url: "", indicatorName: "" });
   };
 
   const getLogroValue = (indicator) => {
@@ -1001,7 +1012,7 @@ const IndicatorsPage = ({ data, userInfo }) => {
             <AccordionDetails>
               <TableContainer
                 component={Paper}
-                sx={{ mt: 2 }}
+                sx={{ mt: 2, backgroundColor: "grey.100" }}
                 variant="outlined"
               >
                 <Table size="small">
@@ -1074,14 +1085,40 @@ const IndicatorsPage = ({ data, userInfo }) => {
                       value={getEvidenceUrl(indicator)}
                       onChange={handleEvidenceUrlChange(indicator.id)}
                       onBlur={handleEvidenceUrlBlur(indicator)}
+                      disabled={!canEditAllIndicators}
                     />
-                    <Button
-                      variant="contained"
-                      onClick={() => handleLinkEvidence(indicator)}
-                      disabled={busyId === `evidence-${indicator.id}`}
-                    >
-                      Vincular
-                    </Button>
+                    {canEditAllIndicators && (
+                      <Tooltip title="Vincular URL de evidencia">
+                        <span>
+                          <Button
+                            variant="contained"
+                            onClick={() => handleLinkEvidence(indicator)}
+                            disabled={busyId === `evidence-${indicator.id}`}
+                          >
+                            Vincular
+                          </Button>
+                        </span>
+                      </Tooltip>
+                    )}
+                    {canEditAllIndicators &&
+                      isGoogleSheetsUrl(getEvidenceUrl(indicator)) && (
+                        <Tooltip title="Abrir sheet de evidencia">
+                          <span>
+                            <Button
+                              variant="outlined"
+                              onClick={() =>
+                                setSheetModalState({
+                                  open: true,
+                                  url: getEvidenceUrl(indicator),
+                                  indicatorName: toText(indicator.nombre),
+                                })
+                              }
+                            >
+                              Ver Sheet
+                            </Button>
+                          </span>
+                        </Tooltip>
+                      )}
                   </Box>
                 </Box>
                 <Box sx={{ gridColumn: "1 / -1" }}>
@@ -1290,6 +1327,55 @@ const IndicatorsPage = ({ data, userInfo }) => {
         periodos={periodos}
         onClose={() => setDetailsState({ open: false, indicator: null })}
       />
+
+      <Dialog
+        open={sheetModalState.open}
+        onClose={closeSheetModal}
+        fullWidth
+        maxWidth={false}
+        PaperProps={{
+          sx: {
+            width: "min(96vw, 1500px)",
+            height: "min(92vh, 920px)",
+          },
+        }}
+      >
+        <DialogTitle sx={{ pr: 8 }}>
+          {sheetModalState.indicatorName || "Sheet de evidencia"}
+        </DialogTitle>
+        <IconButton
+          aria-label="Cerrar sheet"
+          onClick={closeSheetModal}
+          sx={{ position: "absolute", top: 10, right: 10, zIndex: 1 }}
+        >
+          <CloseIcon />
+        </IconButton>
+        <DialogContent sx={{ p: 0, height: "100%" }}>
+          <Box
+            sx={{
+              position: "relative",
+              width: "100%",
+              height: "100%",
+              overflow: "hidden",
+              bgcolor: "grey.100",
+            }}
+          >
+            <iframe
+              title={sheetModalState.indicatorName || "Sheet de evidencia"}
+              src={getSheetEmbedUrl(sheetModalState.url)}
+              style={{
+                position: "absolute",
+                top: "-24px",
+                left: "-44px",
+                width: "calc(101.1% + 44px)",
+                height: "calc(150% + 24px)",
+                border: "none",
+              }}
+              loading="lazy"
+            />
+          </Box>
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 };

@@ -20,6 +20,7 @@ import {
   TableRow,
   TextField,
   Typography,
+  InputAdornment,
 } from "@mui/material";
 import { createSheetRow } from "../api/api";
 
@@ -91,9 +92,13 @@ function Usuarios({ data, userInfo }) {
   };
 
   const handleChange = (field) => (event) => {
+    let value = event.target.value;
+    if (field === "correo") {
+      value = value.replace(/@/g, "");
+    }
     setForm((prev) => ({
       ...prev,
-      [field]: event.target.value,
+      [field]: value,
     }));
   };
 
@@ -225,6 +230,13 @@ function Usuarios({ data, userInfo }) {
               helperText="@correounivalle.edu.co se agrega automáticamente"
               value={form.correo}
               onChange={handleChange("correo")}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    @correounivalle.edu.co
+                  </InputAdornment>
+                ),
+              }}
             />
             <FormControl fullWidth>
               <InputLabel>Dependencia</InputLabel>

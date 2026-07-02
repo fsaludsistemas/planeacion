@@ -38,10 +38,12 @@ El frontend esta construido con React + Vite y consume un backend desplegado en 
 El sistema tiene dos modulos principales:
 
 1. Ejes, Estrategias y Objetivos Decanato
+
 - Mantiene la estructura historica del proyecto.
 - Usuarios con permiso `Sistemas` pueden editar nombres y guardar cambios.
 
 2. Indicadores producto por dependencia
+
 - Muestra indicadores producto filtrados por la dependencia asociada al usuario.
 - Cada indicador se renderiza como un acordeon con `ID`, `nombre` y `dependencia`.
 - Al abrir el acordeon se ve el `desafio`, una tabla con `meta`, `avance` y `URL documento`, y los botones `Ver detalles`, `Editar` y `Eliminar`.
@@ -57,12 +59,14 @@ El sistema tiene dos modulos principales:
 1. Al abrir la app, se verifica la cookie `token`.
 2. Si no hay sesion, se muestra el boton de Google Sign-In.
 3. Al autenticarse:
+
 - Se decodifica el token JWT de Google.
 - Se consultan los datos del backend con `POST /getData`.
 - Se valida el correo contra la hoja `USUARIOS`.
 - Si el usuario existe, se guarda sesion en:
   - Cookie `token` por 5 dias
   - `sessionStorage.loggedUser`
+
 4. Con sesion activa se muestra la interfaz principal.
 5. La vista de indicadores se limita a la dependencia del usuario autenticado.
 
@@ -216,9 +220,7 @@ Formato de respuesta esperado para lecturas:
 
 ```json
 {
-  "data": [
-    { "...": "..." }
-  ]
+  "data": [{ "...": "..." }]
 }
 ```
 
@@ -229,6 +231,7 @@ El frontend asume especificamente `response.data.data` como arreglo.
 Base URL: `https://planeacion-server.vercel.app`
 
 1. `POST /getData`
+
 - Uso: consultar datos por hoja.
 - Body:
 
@@ -252,6 +255,7 @@ Base URL: `https://planeacion-server.vercel.app`
   - `AVANCES`
 
 2. `POST /:sheetName`
+
 - Uso: crear una nueva fila en la hoja indicada.
 - El `id` se asigna automaticamente.
 - Body esperado:
@@ -269,6 +273,7 @@ Base URL: `https://planeacion-server.vercel.app`
 ```
 
 3. `PUT /:sheetName/:id`
+
 - Uso: actualizar una fila existente por `id`.
 - Body esperado:
 
@@ -282,6 +287,7 @@ Base URL: `https://planeacion-server.vercel.app`
 ```
 
 4. `DELETE /:sheetName/:id`
+
 - Uso: eliminar una fila por `id`.
 
 ## Modelo de permisos y roles
@@ -343,59 +349,81 @@ dist
 ## Problemas comunes
 
 1. No aparece login Google
+
 - Verifica conectividad a `https://accounts.google.com/gsi/client`.
 
 2. Login exitoso pero sin acceso
+
 - El correo no esta registrado en la hoja `USUARIOS`.
 
 3. Errores al cargar datos
+
 - Revisar que backend responda correctamente en `POST /getData`.
 - Revisar que `response.data.data` sea arreglo.
 
 4. No se guardan cambios
+
 - Revisar payloads de `POST /:sheetName`, `PUT /:sheetName/:id` y `DELETE /:sheetName/:id`.
 - Confirmar permisos del usuario.
 
----
-
-
-## Trabajo de autoguardado y el manjeo de excel desde la app
+## Manejo de sheet desde la app
 
 Modal con Google Sheets recortado + autoguardado
-1. Modal que muestra una pestaña de Google Sheets (sin menú ni toolbar)
-La idea es abrir un Dialog de MUI con un <iframe> apuntando a la URL de un sheet, pero "2recortando" visualmente la barra de menú superior y los números de fila/columna, para que solo se vean las celdas.
-Código mínimo:
-```js
-import { Dialog, DialogContent, IconButton, Box, CircularProgress, Button } from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
 
-const SHEETS_TOP_CROP = 24;   // px a recortar del menú superior
-const SHEETS_LEFT_CROP = 44;  // px a recortar de los índices de fila
+1. Modal que muestra una pestaña de Google Sheets (sin menú ni toolbar)
+   La idea es abrir un Dialog de MUI con un <iframe> apuntando a la URL de un sheet, pero "2recortando" visualmente la barra de menú superior y los números de fila/columna, para que solo se vean las celdas.
+   Código mínimo:
+
+```js
+import {
+  Dialog,
+  DialogContent,
+  IconButton,
+  Box,
+  CircularProgress,
+  Button,
+} from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
+
+const SHEETS_TOP_CROP = 24; // px a recortar del menú superior
+const SHEETS_LEFT_CROP = 44; // px a recortar de los índices de fila
 
 function SheetModal({ open, onClose, sheetUrl, label }) {
   return (
     <>
       <Button onClick={() => onClose(false)}>{label}</Button>
 
-      <Dialog open={open} onClose={() => onClose(false)}
-        PaperProps={{ sx: { width: '80%', height: '800px', maxWidth: 'none' } }}>
-        <DialogContent sx={{ position: 'relative' }}>
-          <IconButton onClick={() => onClose(false)}
-            sx={{ position: 'absolute', top: 8, right: 8, zIndex: 10 }}>
+      <Dialog
+        open={open}
+        onClose={() => onClose(false)}
+        PaperProps={{ sx: { width: "80%", height: "800px", maxWidth: "none" } }}
+      >
+        <DialogContent sx={{ position: "relative" }}>
+          <IconButton
+            onClick={() => onClose(false)}
+            sx={{ position: "absolute", top: 8, right: 8, zIndex: 10 }}
+          >
             <CloseIcon />
           </IconButton>
 
           {/* Contenedor con overflow hidden = lo que sobresale se oculta */}
-          <Box sx={{ mt: 4, height: '80vh', overflow: 'hidden', position: 'relative' }}>
+          <Box
+            sx={{
+              mt: 4,
+              height: "80vh",
+              overflow: "hidden",
+              position: "relative",
+            }}
+          >
             <iframe
               src={sheetUrl}
               style={{
-                position: 'absolute',
-                top: `-${SHEETS_TOP_CROP}px`,        // sube 24px: oculta el menú
-                left: `-${SHEETS_LEFT_CROP}px`,       // corre 44px: oculta los números de fila
+                position: "absolute",
+                top: `-${SHEETS_TOP_CROP}px`, // sube 24px: oculta el menú
+                left: `-${SHEETS_LEFT_CROP}px`, // corre 44px: oculta los números de fila
                 width: `calc(101.1% + ${SHEETS_LEFT_CROP}px)`,
                 height: `calc(150% + ${SHEETS_TOP_CROP}px)`,
-                border: 'none',
+                border: "none",
               }}
               loading="lazy"
             />
@@ -406,6 +434,7 @@ function SheetModal({ open, onClose, sheetUrl, label }) {
   );
 }
 ```
+
 Cómo funciona el recorte
 El contenedor tiene overflow: 'hidden' entonces todo lo que se salga del contenedor queda oculto
 El <iframe> está desplazado con position: absolute:
@@ -415,20 +444,22 @@ El iframe se agranda (height: 150%, width: 101.1%) para que el área visible del
 Ajustá SHEETS_TOP_CROP y SHEETS_LEFT_CROP si Google Sheets cambia el tamaño de su UI.
 
 ## Autoguardado del campo de Logro
+
 2. Autoguardado: cuando el usuario escribe, se envía a Google Sheets
-La idea es que cada vez que el usuario escribe en un input, se inicia un temporizador de debounce de ~900ms. Si el usuario deja de escribir ese tiempo, se dispara la peticion a la API que escribe el valor en la celda correspondiente del sheet.
-Usuario escribe → setTimeout(900ms)
-  ↻ si sigue escribiendo → se reinicia el timer
-  ✓ si pasan 900ms sin cambios → fetch POST a /api/update
-                                → Google Sheets API: values.update()
-codigo mínimo:
-Frontend (React + MUI)
+   La idea es que cada vez que el usuario escribe en un input, se inicia un temporizador de debounce de ~900ms. Si el usuario deja de escribir ese tiempo, se dispara la peticion a la API que escribe el valor en la celda correspondiente del sheet.
+   Usuario escribe → setTimeout(900ms)
+   ↻ si sigue escribiendo → se reinicia el timer
+   ✓ si pasan 900ms sin cambios → fetch POST a /api/update
+   → Google Sheets API: values.update()
+   codigo mínimo:
+   Frontend (React + MUI)
+
 ```js
-import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { TextField } from '@mui/material';
+import React, { useState, useRef, useCallback, useEffect } from "react";
+import { TextField } from "@mui/material";
 
 function CampoConAutoguardado({ id, valorInicial, onSave }) {
-  const [value, setValue] = useState(valorInicial ?? '');
+  const [value, setValue] = useState(valorInicial ?? "");
   const timerRef = useRef(null);
 
   // Limpieza al desmontar el componente
@@ -450,17 +481,8 @@ function CampoConAutoguardado({ id, valorInicial, onSave }) {
     }, 900);
   };
 
-  return (
-    <TextField
-      value={value}
-      onChange={handleChange}
-      fullWidth
-    />
-  );
+  return <TextField value={value} onChange={handleChange} fullWidth />;
 }
 ```
-
-
-
 
 Si quieres, en un siguiente paso puedo dejar el README aun mas afinado con ejemplos reales de payload para `INDICADORES_PRODUCTO`, `METAS` y `AVANCES`.
