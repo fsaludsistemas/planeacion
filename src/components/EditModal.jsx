@@ -26,6 +26,7 @@ const emptyForm = {
   logro: "",
   responsable: "",
   suma_facultad: false,
+  url_documento_evidencia: "",
 };
 
 const toText = (value) => String(value ?? "").trim() || "No disponible";
@@ -34,6 +35,7 @@ const EditModal = ({
   open,
   loading,
   indicator,
+  evidenceUrl = "",
   dependencias,
   respondeAs,
   desafios,
@@ -70,9 +72,10 @@ const EditModal = ({
           String(indicator.suma_facultad).toLowerCase() === "true" ||
           indicator.suma_facultad === true ||
           indicator.suma_facultad === 1,
+        url_documento_evidencia: evidenceUrl || "",
       });
     }
-  }, [open, indicator]);
+  }, [open, indicator, evidenceUrl]);
 
   const handleChange = (field) => (event) => {
     setForm((prev) => {
@@ -338,6 +341,16 @@ const EditModal = ({
                     />
                   }
                   label="Suma facultad"
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="URL documento evidencia"
+                  placeholder="https://docs.google.com/spreadsheets/..."
+                  helperText="Enlace de Google Sheets del documento de evidencia"
+                  value={form.url_documento_evidencia}
+                  onChange={handleChange("url_documento_evidencia")}
                 />
               </Grid>
             </>

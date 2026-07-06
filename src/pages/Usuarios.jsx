@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Box,
@@ -19,8 +19,8 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
-  InputAdornment,
 } from "@mui/material";
 import { createSheetRow } from "../api/api";
 
@@ -58,11 +58,21 @@ function Usuarios({ data, userInfo }) {
     correo: "",
     id_dependencia: "",
   });
+  const [atTooltipOpen, setAtTooltipOpen] = useState(false);
+  const atTooltipTimerRef = useRef(null);
 
   useEffect(() => {
     setUsers(sortById(getSheet(data, "USUARIOS")));
     setDependencies(sortById(getSheet(data, "DEPENDENCIA", "DEPENDENCIAS")));
   }, [data]);
+
+  useEffect(() => {
+    return () => {
+      if (atTooltipTimerRef.current) {
+        clearTimeout(atTooltipTimerRef.current);
+      }
+    };
+  }, []);
 
   const role = normalize(userInfo?.rol || userInfo?.permiso);
   const canManageUsers = isPrivilegedRole(role);
@@ -91,15 +101,35 @@ function Usuarios({ data, userInfo }) {
     setSuccess("");
   };
 
+  const showAtTooltip = () => {
+    setAtTooltipOpen(true);
+    if (atTooltipTimerRef.current) {
+      clearTimeout(atTooltipTimerRef.current);
+    }
+    atTooltipTimerRef.current = setTimeout(() => {
+      setAtTooltipOpen(false);
+    }, 2500);
+  };
+
   const handleChange = (field) => (event) => {
     let value = event.target.value;
     if (field === "correo") {
+      if (/@/.test(value)) {
+        showAtTooltip();
+      }
       value = value.replace(/@/g, "");
     }
     setForm((prev) => ({
       ...prev,
       [field]: value,
     }));
+  };
+
+  const handleCorreoKeyDown = (event) => {
+    if (event.key === "@") {
+      event.preventDefault();
+      showAtTooltip();
+    }
   };
 
   const handleSubmit = async () => {
@@ -138,7 +168,11 @@ function Usuarios({ data, userInfo }) {
       resetForm();
       setOpen(true);
     } catch (err) {
-      setError(err?.response?.data?.message || err.message || "No se pudo crear el usuario.");
+      setError(
+        err?.response?.data?.message ||
+          err.message ||
+          "No se pudo crear el usuario.",
+      );
       setOpen(true);
     } finally {
       setLoading(false);
@@ -211,7 +245,9 @@ function Usuarios({ data, userInfo }) {
                 <TableCell>{toText(user.id)}</TableCell>
                 <TableCell>{toText(user.correo)}</TableCell>
                 <TableCell>
-                  {toText(dependencyById.get(String(user.id_dependencia))?.nombre)}
+                  {toText(
+                    dependencyById.get(String(user.id_dependencia))?.nombre,
+                  )}
                 </TableCell>
                 <TableCell>{toText(user.rol)}</TableCell>
               </TableRow>
@@ -224,20 +260,47 @@ function Usuarios({ data, userInfo }) {
         <DialogTitle>Crear usuario</DialogTitle>
         <DialogContent dividers>
           <Box sx={{ display: "grid", gap: 2 }}>
-            <TextField
-              fullWidth
-              label="Correo"
-              helperText="@correounivalle.edu.co se agrega automáticamente"
-              value={form.correo}
-              onChange={handleChange("correo")}
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    @correounivalle.edu.co
-                  </InputAdornment>
-                ),
-              }}
-            />
+            <Tooltip
+              open={atTooltipOpen}
+              title="El @ ya está puesto"
+              placement="top"
+              arrow
+            >
+              <TextField
+                fullWidth
+                label="Correo"
+                helperText="@correounivalle.edu.co se agrega automáticamente"
+                value={form.correo}
+                onChange={handleChange("correo")}
+                onKeyDown={handleCorreoKeyDown}
+                InputProps={{
+                  sx: {
+                    position: "relative",
+                    "& input": {
+                      width: "48%",
+                      minWidth: "48%",
+                    },
+                  },
+                  endAdornment: (
+                    <Box
+                      component="span"
+                      sx={{
+                        position: "absolute",
+                        left: "50%",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        color: "text.secondary",
+                        fontSize: "1.3rem",
+                        pointerEvents: "none",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      @correounivalle.edu.co
+                    </Box>
+                  ),
+                }}
+              />
+            </Tooltip>
             <FormControl fullWidth>
               <InputLabel>Dependencia</InputLabel>
               <Select
@@ -245,9 +308,7 @@ function Usuarios({ data, userInfo }) {
                 label="Dependencia"
                 onChange={handleChange("id_dependencia")}
               >
-                <MenuItem value="">
-                  Seleccione una dependencia
-                </MenuItem>
+                <MenuItem value="">Seleccione una dependencia</MenuItem>
                 {dependencies.map((item) => (
                   <MenuItem key={item.id} value={String(item.id)}>
                     {toText(item.nombre)}
