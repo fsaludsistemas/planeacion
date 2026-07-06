@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Box, Container, Tab, Tabs, Typography } from "@mui/material";
 import Cookies from "js-cookie";
 import Header from "./components/Header";
@@ -89,6 +89,27 @@ const App = () => {
     fetchAllData();
   }, [isLogged, appData]);
 
+  const refreshAppData = useCallback(async () => {
+    setIsDataLoading(true);
+    setDataError("");
+
+    try {
+      const payload = await getData();
+      const dataset = resolveDataset(payload);
+
+      if (!dataset) {
+        throw new Error("No se obtuvo un dataset válido.");
+      }
+
+      setAppData(dataset);
+    } catch (error) {
+      console.error("Error actualizando dataset principal:", error);
+      setDataError("No se pudo actualizar la información de la aplicación.");
+    } finally {
+      setIsDataLoading(false);
+    }
+  }, []);
+
   const handleChange = (event, newValue) => {
     setIsLoading(true);
     setTimeout(() => {
@@ -117,7 +138,13 @@ const App = () => {
 
   const renderCurrentTab = () => {
     if (currentTab === 0) {
-      return <IndicatorsPage data={appData} userInfo={userInfo} />;
+      return (
+        <IndicatorsPage
+          data={appData}
+          userInfo={userInfo}
+          onRefreshData={refreshAppData}
+        />
+      );
     }
 
     if (canManageUsers && currentTab === 1) {

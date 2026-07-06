@@ -109,7 +109,7 @@ const getSheetEmbedUrl = (value) => {
   return url;
 };
 
-const IndicatorsPage = ({ data, userInfo }) => {
+const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
   const [filters, setFilters] = useState({
     dependencia: "",
     tipoDependencia: "TODAS",
@@ -504,6 +504,15 @@ const IndicatorsPage = ({ data, userInfo }) => {
   const isIndicatorOwnedByUser = (indicator) =>
     String(indicator.responsable || "") === currentUserId;
 
+  const getSavedEvidenceUrl = (indicator) => {
+    const evidencia = evidenciaByIndicatorId.get(String(indicator.id));
+    const yearKey = `url_${EVIDENCE_YEAR}`;
+    return String(evidencia?.[yearKey] ?? "");
+  };
+
+  const isEvidenceLinked = (indicator) =>
+    isGoogleSheetsUrl(getSavedEvidenceUrl(indicator));
+
   const getEvidenceUrl = (indicator) => {
     const storedValue = evidenceUrls[String(indicator.id)];
     if (storedValue !== undefined) return storedValue;
@@ -515,6 +524,37 @@ const IndicatorsPage = ({ data, userInfo }) => {
         indicator?.urlDocumentoEvidencia ??
         "",
     );
+  };
+
+  const openEvidenceSheet = (indicator) => {
+    const url = getSavedEvidenceUrl(indicator) || getEvidenceUrl(indicator);
+    if (!isGoogleSheetsUrl(url)) return;
+    setSheetModalState({
+      open: true,
+      url,
+      indicatorName: toText(indicator.nombre),
+    });
+  };
+
+  const saveEvidenceUrl = async (indicator, nextValue) => {
+    const trimmed = String(nextValue ?? "").trim();
+    if (trimmed && !isGoogleSheetsUrl(trimmed)) {
+      throw new Error("La URL de evidencia debe ser un enlace de Google Sheets.");
+    }
+
+    const yearKey = `url_${EVIDENCE_YEAR}`;
+    const evidenceRow = evidenciaByIndicatorId.get(String(indicator.id));
+    const payload = {
+      id: evidenceRow?.id ?? nextEvidenceId,
+      id_indicador_producto: String(indicator.id),
+      [yearKey]: trimmed,
+    };
+
+    if (evidenceRow?.id) {
+      await updateSheetRow(EVIDENCES_SHEET_NAME, evidenceRow.id, payload);
+    } else if (trimmed) {
+      await createSheetRow(EVIDENCES_SHEET_NAME, payload);
+    }
   };
 
   const handleEvidenceUrlChange = (indicatorId) => (event) => {
@@ -550,24 +590,39 @@ const IndicatorsPage = ({ data, userInfo }) => {
     setBusyId(`evidence-${indicator.id}`);
     setActionError("");
     try {
-      const yearKey = `url_${EVIDENCE_YEAR}`;
-      const evidenceRow = evidenciaByIndicatorId.get(String(indicator.id));
-      const payload = {
-        id: evidenceRow?.id ?? nextEvidenceId,
-        id_indicador_producto: String(indicator.id),
-        [yearKey]: nextValue,
-      };
-
-      if (evidenceRow?.id) {
-        await updateSheetRow(EVIDENCES_SHEET_NAME, evidenceRow.id, payload);
-      } else {
-        await createSheetRow(EVIDENCES_SHEET_NAME, payload);
-      }
+      await saveEvidenceUrl(indicator, nextValue);
       window.location.reload();
     } catch (error) {
       setActionError(
         error?.response?.data?.message ||
+          error.message ||
           "No se pudo vincular la URL de evidencia.",
+      );
+    } finally {
+      setBusyId("");
+    }
+  };
+
+  const handleEditIndicator = async (indicator, form) => {
+    const { url_documento_evidencia: nextEvidenceUrl, ...indicatorPayload } =
+      form;
+    setBusyId(String(indicator.id));
+    setActionError("");
+    try {
+      await updateSheetRow(SHEET_NAME, indicator.id, indicatorPayload);
+
+      const trimmedUrl = String(nextEvidenceUrl ?? "").trim();
+      const savedUrl = getSavedEvidenceUrl(indicator).trim();
+      if (trimmedUrl !== savedUrl) {
+        await saveEvidenceUrl(indicator, trimmedUrl);
+      }
+
+      window.location.reload();
+    } catch (error) {
+      setActionError(
+        error?.response?.data?.message ||
+          error.message ||
+          "No se pudo actualizar el indicador.",
       );
     } finally {
       setBusyId("");
@@ -576,6 +631,9 @@ const IndicatorsPage = ({ data, userInfo }) => {
 
   const closeSheetModal = () => {
     setSheetModalState({ open: false, url: "", indicatorName: "" });
+    setLogroValues({});
+    setEvidenceUrls({});
+    void onRefreshData?.();
   };
 
   const getLogroValue = (indicator) => {
@@ -1073,53 +1131,67 @@ const IndicatorsPage = ({ data, userInfo }) => {
                   alignItems: "start",
                 }}
               >
-                <Box sx={{ gridColumn: "1 / -1" }}>
-                  <Typography className="detail-label" sx={{ mb: 1 }}>
-                    URL documento evidencia
-                  </Typography>
-                  <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      placeholder="URL del documento de evidencia"
-                      value={getEvidenceUrl(indicator)}
-                      onChange={handleEvidenceUrlChange(indicator.id)}
-                      onBlur={handleEvidenceUrlBlur(indicator)}
-                      disabled={!canEditAllIndicators}
-                    />
-                    {canEditAllIndicators && (
-                      <Tooltip title="Vincular URL de evidencia">
-                        <span>
-                          <Button
-                            variant="contained"
-                            onClick={() => handleLinkEvidence(indicator)}
-                            disabled={busyId === `evidence-${indicator.id}`}
-                          >
-                            Vincular
-                          </Button>
-                        </span>
+                <Box sx={{ width: "100%" }}>
+                  {isEvidenceLinked(indicator) ? (
+                    <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                      <Tooltip title="Abrir sheet de evidencia" >
+                        <Typography
+                          component="span"
+                          
+                          onClick={() => openEvidenceSheet(indicator)}
+                          sx={{
+                            flex: 1,
+                            color: "primary.main",
+                            textDecoration: "underline",
+                            cursor: "pointer",
+                            "&:hover": { color: "primary.dark" },
+                            width: "50%",
+                          }}
+                        >
+                          URL documento evidencia
+                        </Typography>
                       </Tooltip>
-                    )}
-                    {canEditAllIndicators &&
-                      isGoogleSheetsUrl(getEvidenceUrl(indicator)) && (
-                        <Tooltip title="Abrir sheet de evidencia">
+                      {canEditAllIndicators && (
+                        <Tooltip title="La URL ya está vinculada"  >
                           <span>
-                            <Button
-                              variant="outlined"
-                              onClick={() =>
-                                setSheetModalState({
-                                  open: true,
-                                  url: getEvidenceUrl(indicator),
-                                  indicatorName: toText(indicator.nombre),
-                                })
-                              }
-                            >
-                              Ver Sheet
+                            <Button variant="contained" disabled>
+                              Vincular
                             </Button>
                           </span>
                         </Tooltip>
                       )}
-                  </Box>
+                    </Box>
+                  ) : (
+                    <>
+                      <Typography className="detail-label" sx={{ mb: 1 }}>
+                        URL documento evidencia
+                      </Typography>
+                      <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          placeholder="URL del documento de evidencia"
+                          value={getEvidenceUrl(indicator)}
+                          onChange={handleEvidenceUrlChange(indicator.id)}
+                          onBlur={handleEvidenceUrlBlur(indicator)}
+                          disabled={!canEditAllIndicators}
+                        />
+                        {canEditAllIndicators && (
+                          <Tooltip title="Vincular URL de evidencia">
+                            <span>
+                              <Button
+                                variant="contained"
+                                onClick={() => handleLinkEvidence(indicator)}
+                                disabled={busyId === `evidence-${indicator.id}`}
+                              >
+                                Vincular
+                              </Button>
+                            </span>
+                          </Tooltip>
+                        )}
+                      </Box>
+                    </>
+                  )}
                 </Box>
                 <Box sx={{ gridColumn: "1 / -1" }}>
                   <Typography className="detail-label" sx={{ mb: 1 }}>
@@ -1299,6 +1371,9 @@ const IndicatorsPage = ({ data, userInfo }) => {
         open={editState.open}
         loading={busyId === String(editState.indicator?.id)}
         indicator={editState.indicator}
+        evidenceUrl={
+          editState.indicator ? getEvidenceUrl(editState.indicator) : ""
+        }
         dependencias={dependencias}
         desafios={desafios}
         estrategiasConvergentes={estrategiasConvergentes}
@@ -1310,7 +1385,9 @@ const IndicatorsPage = ({ data, userInfo }) => {
         metas={metas}
         periodos={[]}
         onClose={() => setEditState({ open: false, indicator: null })}
-        onSubmit={(payload) => updateIndicator(editState.indicator.id, payload)}
+        onSubmit={(payload) =>
+          handleEditIndicator(editState.indicator, payload)
+        }
       />
 
       <ModalDetails
