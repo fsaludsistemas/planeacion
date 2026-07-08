@@ -27,6 +27,12 @@ const emptyForm = {
   responsable: "",
   suma_facultad: false,
   url_documento_evidencia: "",
+  meta_2025: "",
+  meta_2026: "",
+  meta_2027: "",
+  meta_2028: "",
+  meta_2029: "",
+  meta_2030: "",
 };
 
 const toText = (value) => String(value ?? "").trim() || "No disponible";
@@ -45,6 +51,7 @@ const EditModal = ({
   indicadoresResultado,
   periodos,
   usuarios,
+  metas,
   mode = "full",
   onClose,
   onSubmit,
@@ -53,6 +60,13 @@ const EditModal = ({
 
   useEffect(() => {
     if (open && indicator) {
+      const meta =
+        indicator.meta ||
+        metas?.find(
+          (item) =>
+            String(item.id_indicador_producto || "") ===
+            String(indicator.id || ""),
+        );
       setForm({
         nombre: indicator.nombre || "",
         objetivo_escuela: indicator.objetivo_escuela || "",
@@ -73,9 +87,15 @@ const EditModal = ({
           indicator.suma_facultad === true ||
           indicator.suma_facultad === 1,
         url_documento_evidencia: evidenceUrl || "",
+        meta_2025: String(meta?.meta_2025 ?? ""),
+        meta_2026: String(meta?.meta_2026 ?? ""),
+        meta_2027: String(meta?.meta_2027 ?? ""),
+        meta_2028: String(meta?.meta_2028 ?? ""),
+        meta_2029: String(meta?.meta_2029 ?? ""),
+        meta_2030: String(meta?.meta_2030 ?? ""),
       });
     }
-  }, [open, indicator, evidenceUrl]);
+  }, [open, indicator, evidenceUrl, metas]);
 
   const handleChange = (field) => (event) => {
     setForm((prev) => {
@@ -104,7 +124,12 @@ const EditModal = ({
   };
 
   const submit = () => onSubmit(form);
-  const canSubmit = form.nombre && form.id_desafio;
+
+  const handleMetaChange = (field) => (event) => {
+    const nextValue = event.target.value;
+    if (nextValue !== "" && Number.isNaN(Number(nextValue))) return;
+    setForm((prev) => ({ ...prev, [field]: nextValue }));
+  };
 
   const convergenteOptions = useMemo(
     () =>
@@ -159,6 +184,7 @@ const EditModal = ({
   }, [usuarios, form.id_dependencia]);
 
   const isLogroOnly = mode === "logro";
+  const canSubmit = isLogroOnly ? form.logro : form.nombre;
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
@@ -326,7 +352,7 @@ const EditModal = ({
                   ))}
                 </TextField>
               </Grid>
-              <Grid item xs={12} md={4}>
+              <Grid item xs={12} md={12}>
                 <FormControlLabel
                   sx={{ mt: 1 }}
                   control={
@@ -341,6 +367,66 @@ const EditModal = ({
                     />
                   }
                   label="Suma facultad"
+                />
+              </Grid>
+              <Grid item xs={12} md={2}>
+                <TextField
+                  fullWidth
+                  label="Meta 2025"
+                  type="number"
+                  inputProps={{ step: "any" }}
+                  value={form.meta_2025}
+                  onChange={handleMetaChange("meta_2025")}
+                />
+              </Grid>
+              <Grid item xs={12} md={2}>
+                <TextField
+                  fullWidth
+                  label="Meta 2026"
+                  type="number"
+                  inputProps={{ step: "any" }}
+                  value={form.meta_2026}
+                  onChange={handleMetaChange("meta_2026")}
+                />
+              </Grid>
+              <Grid item xs={12} md={2}>
+                <TextField
+                  fullWidth
+                  label="Meta 2027"
+                  type="number"
+                  inputProps={{ step: "any" }}
+                  value={form.meta_2027}
+                  onChange={handleMetaChange("meta_2027")}
+                />
+              </Grid>
+              <Grid item xs={12} md={2}>
+                <TextField
+                  fullWidth
+                  label="Meta 2028"
+                  type="number"
+                  inputProps={{ step: "any" }}
+                  value={form.meta_2028}
+                  onChange={handleMetaChange("meta_2028")}
+                />
+              </Grid>
+              <Grid item xs={12} md={2}>
+                <TextField
+                  fullWidth
+                  label="Meta 2029"
+                  type="number"
+                  inputProps={{ step: "any" }}
+                  value={form.meta_2029}
+                  onChange={handleMetaChange("meta_2029")}
+                />
+              </Grid>
+              <Grid item xs={12} md={2}>
+                <TextField
+                  fullWidth
+                  label="Meta 2030"
+                  type="number"
+                  inputProps={{ step: "any" }}
+                  value={form.meta_2030}
+                  onChange={handleMetaChange("meta_2030")}
                 />
               </Grid>
               <Grid item xs={12}>

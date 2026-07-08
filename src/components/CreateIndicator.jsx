@@ -43,6 +43,7 @@ const CreateIndicator = ({
   loading,
   dependencias,
   respondeAs,
+  onCreateRespondeA,
   desafios,
   estrategiasConvergentes,
   estrategiasFacultad,
@@ -56,14 +57,18 @@ const CreateIndicator = ({
   const [form, setForm] = useState(emptyForm);
   const [respondeADialogOpen, setRespondeADialogOpen] = useState(false);
   const [respondeADraft, setRespondeADraft] = useState("");
+  const [respondeAItems, setRespondeAItems] = useState(respondeAs);
+  const [respondeAError, setRespondeAError] = useState("");
 
   useEffect(() => {
     if (open) {
       setForm(emptyForm);
       setRespondeADialogOpen(false);
       setRespondeADraft("");
+      setRespondeAError("");
+      setRespondeAItems(respondeAs);
     }
-  }, [open]);
+  }, [open, respondeAs]);
 
   const fallbackOptions = (items, relatedItems) =>
     relatedItems.length ? relatedItems : items;
@@ -134,7 +139,7 @@ const CreateIndicator = ({
       ),
     [indicadoresResultado, form.id_programa_inst],
   );
-  const respondeAOptions = useMemo(() => respondeAs, [respondeAs]);
+  const respondeAOptions = useMemo(() => respondeAItems, [respondeAItems]);
   const responsableOptions = useMemo(() => {
     if (!form.id_dependencia) return [];
     return usuarios.filter(
@@ -173,6 +178,7 @@ const CreateIndicator = ({
           next.create_responde_a = true;
           next.id_responde_a = "";
           setRespondeADraft("");
+          setRespondeAError("");
           setRespondeADialogOpen(true);
         } else {
           next.create_responde_a = false;
@@ -186,6 +192,7 @@ const CreateIndicator = ({
   const handleCloseRespondeADialog = () => {
     setRespondeADialogOpen(false);
     setRespondeADraft("");
+    setRespondeAError("");
     setForm((prev) => ({
       ...prev,
       create_responde_a: false,
@@ -193,15 +200,45 @@ const CreateIndicator = ({
     }));
   };
 
-  const handleConfirmRespondeA = () => {
+  const handleConfirmRespondeA = async () => {
     const name = respondeADraft.trim();
-    if (!name) return;
-    setForm((prev) => ({
-      ...prev,
-      create_responde_a: true,
-      responde_a_nombre: name,
-    }));
-    setRespondeADialogOpen(false);
+    if (!name) {
+      setRespondeAError("Escribe un nombre para RESPONDE_A.");
+      return;
+    }
+
+    if (!onCreateRespondeA) {
+      setRespondeAError("No se pudo crear el responde a.");
+      return;
+    }
+
+    try {
+      const created = await onCreateRespondeA(name);
+      const createdId = String(created?.id ?? "");
+      if (!createdId) {
+        throw new Error("No se recibió el id del nuevo responde a.");
+      }
+
+      setRespondeAItems((prev) => {
+        const alreadyExists = prev.some(
+          (item) => String(item.id) === createdId,
+        );
+        return alreadyExists
+          ? prev
+          : [...prev, { id: createdId, nombre: created?.nombre ?? name }];
+      });
+      setForm((prev) => ({
+        ...prev,
+        create_responde_a: false,
+        id_responde_a: createdId,
+        responde_a_nombre: name,
+      }));
+      setRespondeADialogOpen(false);
+      setRespondeADraft("");
+      setRespondeAError("");
+    } catch (error) {
+      setRespondeAError(error?.message || "No se pudo crear el responde a.");
+    }
   };
 
   const submit = () => {
@@ -484,6 +521,8 @@ const CreateIndicator = ({
             label="Nombre"
             value={respondeADraft}
             onChange={(event) => setRespondeADraft(event.target.value)}
+            error={Boolean(respondeAError)}
+            helperText={respondeAError || ""}
           />
         </DialogContent>
         <DialogActions>
