@@ -16,12 +16,27 @@ export const getData = async () => {
 
 export const createSheetRow = async (sheetName, data) => {
   try {
-  const response = await api.post(`/${sheetName}`, {data} );
-  console.log("Create sheet row response:", response);
-  console.log("Response data:", response.data);
-  return response.data;
+    const response = await api.post(`/${sheetName}`, { data });
+    console.log("Create sheet row response:", response);
+    console.log("Response data:", response.data);
+    return response.data;
   } catch (error) {
     console.error("Error creating sheet row:", error);
+    throw error;
+  }
+};
+
+export const saveEvidenceRow = async (indicatorId, fieldName, urlValue) => {
+  try {
+    const response = await api.post(`/evidencias/${indicatorId}`, {
+      data: {
+        [fieldName]: urlValue,
+      },
+    });
+    console.log("Save evidence row response:", response.data);
+    return response.data;
+  } catch (error) {
+    console.error("Error saving evidence row:", error);
     throw error;
   }
 };

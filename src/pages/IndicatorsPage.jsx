@@ -34,7 +34,12 @@ import CloseIcon from "@mui/icons-material/Close";
 import CreateIndicator from "../components/CreateIndicator";
 import EditModal from "../components/EditModal";
 import ModalDetails from "../components/ModalDetails";
-import { createSheetRow, deleteSheetRow, updateSheetRow } from "../api/api";
+import {
+  createSheetRow,
+  deleteSheetRow,
+  saveEvidenceRow,
+  updateSheetRow,
+} from "../api/api";
 import "../styles/indicators.css";
 
 const SHEET_NAME = "INDICADORES_PRODUCTO";
@@ -238,13 +243,6 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
       ),
     [evidencias],
   );
-  const nextEvidenceId = useMemo(() => {
-    const maxId = evidencias.reduce((max, item) => {
-      const current = Number(item?.id ?? 0);
-      return Number.isFinite(current) && current > max ? current : max;
-    }, 0);
-    return String(maxId + 1);
-  }, [evidencias]);
   const userById = useMemo(
     () => new Map(usuarios.map((item) => [String(item.id), item])),
     [usuarios],
@@ -311,73 +309,92 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
         excludeField !== "dependencia" &&
         filters.dependencia &&
         String(row.id_dependencia || "") !== filters.dependencia
-      ) return false;
+      )
+        return false;
 
       if (
         excludeField !== "tipoDependencia" &&
         filters.tipoDependencia !== "TODAS" &&
         getTipoDependencia(row.dependencia) !== filters.tipoDependencia
-      ) return false;
+      )
+        return false;
 
       if (
         excludeField !== "respondeA" &&
-        !matchesRespondeAFilter(row.id_responde_a, filters.respondeA, respondeAById)
-      ) return false;
+        !matchesRespondeAFilter(
+          row.id_responde_a,
+          filters.respondeA,
+          respondeAById,
+        )
+      )
+        return false;
 
       if (
         excludeField !== "desafio" &&
         filters.desafio &&
         String(row.id_desafio || "") !== filters.desafio
-      ) return false;
+      )
+        return false;
 
       if (
         excludeField !== "estrategiaConvergente" &&
         filters.estrategiaConvergente &&
-        String(row.id_estrategia_convergente || "") !== filters.estrategiaConvergente
-      ) return false;
+        String(row.id_estrategia_convergente || "") !==
+          filters.estrategiaConvergente
+      )
+        return false;
 
       if (
         excludeField !== "estrategiaFacultad" &&
         filters.estrategiaFacultad &&
         String(row.id_estrategia_facultad || "") !== filters.estrategiaFacultad
-      ) return false;
+      )
+        return false;
 
       if (
         excludeField !== "programaInstitucional" &&
         filters.programaInstitucional &&
         String(row.id_programa_inst || "") !== filters.programaInstitucional
-      ) return false;
+      )
+        return false;
 
       if (
         excludeField !== "indicadorResultado" &&
         filters.indicadorResultado &&
         String(row.id_indicador_resultado || "") !== filters.indicadorResultado
-      ) return false;
+      )
+        return false;
 
       return true;
     });
   };
 
   const filterOptions = useMemo(() => {
-    const depRows    = getRowsExcept("dependencia");
-    const raRows     = getRowsExcept("respondeA");
-    const desRows    = getRowsExcept("desafio");
-    const convRows   = getRowsExcept("estrategiaConvergente");
-    const facRows    = getRowsExcept("estrategiaFacultad");
-    const progRows   = getRowsExcept("programaInstitucional");
-    const resRows    = getRowsExcept("indicadorResultado");
+    const depRows = getRowsExcept("dependencia");
+    const raRows = getRowsExcept("respondeA");
+    const desRows = getRowsExcept("desafio");
+    const convRows = getRowsExcept("estrategiaConvergente");
+    const facRows = getRowsExcept("estrategiaFacultad");
+    const progRows = getRowsExcept("programaInstitucional");
+    const resRows = getRowsExcept("indicadorResultado");
 
     const ids = (arr, key) => new Set(arr.map((r) => String(r[key] || "")));
 
     return {
       dependencias: sortById(
-        dependencias.filter((item) => ids(depRows, "id_dependencia").has(String(item.id))),
+        dependencias.filter((item) =>
+          ids(depRows, "id_dependencia").has(String(item.id)),
+        ),
       ),
       respondeAs: sortById(
-        respondeAs.filter((item) => ids(raRows, "id_responde_a").has(String(item.id))),
+        respondeAs.filter((item) =>
+          ids(raRows, "id_responde_a").has(String(item.id)),
+        ),
       ),
       desafios: sortById(
-        desafios.filter((item) => ids(desRows, "id_desafio").has(String(item.id))),
+        desafios.filter((item) =>
+          ids(desRows, "id_desafio").has(String(item.id)),
+        ),
       ),
       estrategiasConvergentes: sortById(
         estrategiasConvergentes.filter((item) =>
@@ -397,7 +414,8 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
       indicadoresResultado: sortById(
         indicadoresResultado.filter((item) =>
           resRows.some(
-            (row) => String(row.id_indicador_resultado || "") === String(item.id),
+            (row) =>
+              String(row.id_indicador_resultado || "") === String(item.id),
           ),
         ),
       ),
@@ -423,33 +441,61 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
 
       if (
         next.dependencia &&
-        !filterOptions.dependencias.some((d) => String(d.id) === next.dependencia)
-      ) { next.dependencia = ""; changed = true; }
+        !filterOptions.dependencias.some(
+          (d) => String(d.id) === next.dependencia,
+        )
+      ) {
+        next.dependencia = "";
+        changed = true;
+      }
 
       if (
         next.desafio &&
         !filterOptions.desafios.some((d) => String(d.id) === next.desafio)
-      ) { next.desafio = ""; changed = true; }
+      ) {
+        next.desafio = "";
+        changed = true;
+      }
 
       if (
         next.estrategiaConvergente &&
-        !filterOptions.estrategiasConvergentes.some((d) => String(d.id) === next.estrategiaConvergente)
-      ) { next.estrategiaConvergente = ""; changed = true; }
+        !filterOptions.estrategiasConvergentes.some(
+          (d) => String(d.id) === next.estrategiaConvergente,
+        )
+      ) {
+        next.estrategiaConvergente = "";
+        changed = true;
+      }
 
       if (
         next.estrategiaFacultad &&
-        !filterOptions.estrategiasFacultad.some((d) => String(d.id) === next.estrategiaFacultad)
-      ) { next.estrategiaFacultad = ""; changed = true; }
+        !filterOptions.estrategiasFacultad.some(
+          (d) => String(d.id) === next.estrategiaFacultad,
+        )
+      ) {
+        next.estrategiaFacultad = "";
+        changed = true;
+      }
 
       if (
         next.programaInstitucional &&
-        !filterOptions.programasInstitucionales.some((d) => String(d.id) === next.programaInstitucional)
-      ) { next.programaInstitucional = ""; changed = true; }
+        !filterOptions.programasInstitucionales.some(
+          (d) => String(d.id) === next.programaInstitucional,
+        )
+      ) {
+        next.programaInstitucional = "";
+        changed = true;
+      }
 
       if (
         next.indicadorResultado &&
-        !filterOptions.indicadoresResultado.some((d) => String(d.id) === next.indicadorResultado)
-      ) { next.indicadorResultado = ""; changed = true; }
+        !filterOptions.indicadoresResultado.some(
+          (d) => String(d.id) === next.indicadorResultado,
+        )
+      ) {
+        next.indicadorResultado = "";
+        changed = true;
+      }
 
       return changed ? next : prev;
     });
@@ -538,23 +584,16 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
 
   const saveEvidenceUrl = async (indicator, nextValue) => {
     const trimmed = String(nextValue ?? "").trim();
-    if (trimmed && !isGoogleSheetsUrl(trimmed)) {
-      throw new Error("La URL de evidencia debe ser un enlace de Google Sheets.");
+    if (!trimmed) return;
+
+    if (!isGoogleSheetsUrl(trimmed)) {
+      throw new Error(
+        "La URL de evidencia debe ser un enlace de Google Sheets.",
+      );
     }
 
     const yearKey = `url_${EVIDENCE_YEAR}`;
-    const evidenceRow = evidenciaByIndicatorId.get(String(indicator.id));
-    const payload = {
-      id: evidenceRow?.id ?? nextEvidenceId,
-      id_indicador_producto: String(indicator.id),
-      [yearKey]: trimmed,
-    };
-
-    if (evidenceRow?.id) {
-      await updateSheetRow(EVIDENCES_SHEET_NAME, evidenceRow.id, payload);
-    } else if (trimmed) {
-      await createSheetRow(EVIDENCES_SHEET_NAME, payload);
-    }
+    await saveEvidenceRow(String(indicator.id), yearKey, trimmed);
   };
 
   const handleEvidenceUrlChange = (indicatorId) => (event) => {
@@ -570,7 +609,9 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
     if (!nextValue) return;
 
     if (!isGoogleSheetsUrl(nextValue)) {
-      setActionError("La URL de evidencia debe ser un enlace de Google Sheets.");
+      setActionError(
+        "La URL de evidencia debe ser un enlace de Google Sheets.",
+      );
       return;
     }
   };
@@ -583,7 +624,9 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
     }
 
     if (!isGoogleSheetsUrl(nextValue)) {
-      setActionError("La URL de evidencia debe ser un enlace de Google Sheets.");
+      setActionError(
+        "La URL de evidencia debe ser un enlace de Google Sheets.",
+      );
       return;
     }
 
@@ -604,12 +647,21 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
   };
 
   const handleEditIndicator = async (indicator, form) => {
-    const { url_documento_evidencia: nextEvidenceUrl, ...indicatorPayload } =
-      form;
+    const indicatorPayload = { ...form };
+    const nextEvidenceUrl = indicatorPayload.url_documento_evidencia;
+    delete indicatorPayload.url_documento_evidencia;
+    delete indicatorPayload.meta_2025;
+    delete indicatorPayload.meta_2026;
+    delete indicatorPayload.meta_2027;
+    delete indicatorPayload.meta_2028;
+    delete indicatorPayload.meta_2029;
+    delete indicatorPayload.meta_2030;
     setBusyId(String(indicator.id));
     setActionError("");
     try {
       await updateSheetRow(SHEET_NAME, indicator.id, indicatorPayload);
+
+      await saveMetaForIndicator(indicator.id, form);
 
       const trimmedUrl = String(nextEvidenceUrl ?? "").trim();
       const savedUrl = getSavedEvidenceUrl(indicator).trim();
@@ -720,6 +772,65 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
     return metaPayload;
   };
 
+  const buildEditableMetaPayload = (indicatorId, payload) => {
+    const metaFields = [
+      "meta_2025",
+      "meta_2026",
+      "meta_2027",
+      "meta_2028",
+      "meta_2029",
+      "meta_2030",
+    ];
+    const metaPayload = {
+      id_indicador_producto: String(indicatorId),
+    };
+
+    metaFields.forEach((field) => {
+      const value = payload?.[field];
+      metaPayload[field] = value === undefined || value === null ? "" : value;
+    });
+
+    return metaPayload;
+  };
+
+  const getNextRespondeAId = () => {
+    const maxId = respondeAs.reduce((max, item) => {
+      const current = Number(item?.id ?? 0);
+      return Number.isFinite(current) && current > max ? current : max;
+    }, 0);
+    return String(maxId + 1);
+  };
+
+  const saveMetaForIndicator = async (indicatorId, payload) => {
+    const metaPayload = buildEditableMetaPayload(indicatorId, payload);
+    const existingMeta = metaByIndicatorId.get(String(indicatorId));
+    const hasAnyValue = Object.keys(metaPayload).some(
+      (key) => key !== "id_indicador_producto" && metaPayload[key] !== "",
+    );
+
+    if (existingMeta?.id) {
+      await updateSheetRow(META_SHEET_NAME, existingMeta.id, metaPayload);
+      return;
+    }
+
+    if (hasAnyValue) {
+      await createSheetRow(META_SHEET_NAME, metaPayload);
+    }
+  };
+
+  const createRespondeA = async (name) => {
+    const fallbackId = getNextRespondeAId();
+    const response = await createSheetRow("RESPONDE_A", {
+      id: fallbackId,
+      nombre: name,
+    });
+    const respondeAId = getCreatedIndicatorId(response) || fallbackId;
+    if (!respondeAId) {
+      throw new Error("No se pudo obtener el id del nuevo responde a.");
+    }
+    return { id: respondeAId, nombre: name };
+  };
+
   const getCreatedIndicatorId = (responseData) => {
     console.log("Create response data:", responseData);
     if (!responseData) return "";
@@ -729,7 +840,36 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
     if (Array.isArray(responseData)) {
       const first = responseData[0];
       console.log("First item in array:", first);
-      return String(first?.id ?? first?.insertId ?? first?.insertedId ?? "");
+      return String(
+        first?.id ??
+          first?.insertId ??
+          first?.insertedId ??
+          first?.data?.id ??
+          "",
+      );
+    }
+    if (typeof responseData === "object") {
+      const candidates = [
+        responseData?.id,
+        responseData?.insertId,
+        responseData?.insertedId,
+        responseData?.data?.id,
+        responseData?.data?.insertId,
+        responseData?.data?.insertedId,
+      ];
+      for (const candidate of candidates) {
+        if (
+          candidate !== undefined &&
+          candidate !== null &&
+          String(candidate).trim()
+        ) {
+          return String(candidate);
+        }
+      }
+      if (Array.isArray(responseData?.data) && responseData.data.length) {
+        const first = responseData.data[0];
+        return String(first?.id ?? first?.insertId ?? first?.insertedId ?? "");
+      }
     }
     return String(
       responseData?.id ??
@@ -745,6 +885,14 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
     setActionError("");
     try {
       const indicatorPayload = { ...payload };
+      const metaFields = [
+        "meta_2025",
+        "meta_2026",
+        "meta_2027",
+        "meta_2028",
+        "meta_2029",
+        "meta_2030",
+      ];
       indicatorPayload.suma_facultad =
         indicatorPayload.suma_facultad === true ||
         String(indicatorPayload.suma_facultad).toLowerCase() === "true";
@@ -757,17 +905,15 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
         if (!respondeAName) {
           throw new Error("Debes escribir el nombre de RESPONDE_A.");
         }
-        const respondeAResponse = await createSheetRow("RESPONDE_A", {
-          nombre: respondeAName,
-        });
-        const respondeAId = getCreatedIndicatorId(respondeAResponse);
-        if (respondeAId) {
-          indicatorPayload.id_responde_a = respondeAId;
-        }
+        const respondeA = await createRespondeA(respondeAName);
+        indicatorPayload.id_responde_a = respondeA.id;
       }
 
       delete indicatorPayload.create_responde_a;
       delete indicatorPayload.responde_a_nombre;
+      metaFields.forEach((field) => {
+        delete indicatorPayload[field];
+      });
 
       const indicatorResponse = await createSheetRow(
         SHEET_NAME,
@@ -1134,10 +1280,9 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
                 <Box sx={{ width: "100%" }}>
                   {isEvidenceLinked(indicator) ? (
                     <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-                      <Tooltip title="Abrir sheet de evidencia" >
+                      <Tooltip title="Abrir sheet de evidencia">
                         <Typography
                           component="span"
-                          
                           onClick={() => openEvidenceSheet(indicator)}
                           sx={{
                             flex: 1,
@@ -1152,7 +1297,7 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
                         </Typography>
                       </Tooltip>
                       {canEditAllIndicators && (
-                        <Tooltip title="La URL ya está vinculada"  >
+                        <Tooltip title="La URL ya está vinculada">
                           <span>
                             <Button variant="contained" disabled>
                               Vincular
@@ -1166,7 +1311,14 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
                       <Typography className="detail-label" sx={{ mb: 1 }}>
                         URL documento evidencia
                       </Typography>
-                      <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                      <Box
+                        sx={{
+                          width: "415%",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 1,
+                        }}
+                      >
                         <TextField
                           fullWidth
                           size="small"
@@ -1175,19 +1327,26 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
                           onChange={handleEvidenceUrlChange(indicator.id)}
                           onBlur={handleEvidenceUrlBlur(indicator)}
                           disabled={!canEditAllIndicators}
+                          sx={{ width: "100%" }}
                         />
                         {canEditAllIndicators && (
-                          <Tooltip title="Vincular URL de evidencia">
-                            <span>
-                              <Button
-                                variant="contained"
-                                onClick={() => handleLinkEvidence(indicator)}
-                                disabled={busyId === `evidence-${indicator.id}`}
-                              >
-                                Vincular
-                              </Button>
-                            </span>
-                          </Tooltip>
+                          <Box
+                            sx={{ display: "flex", justifyContent: "flex-end" }}
+                          >
+                            <Tooltip title="Vincular URL de evidencia">
+                              <span>
+                                <Button
+                                  variant="contained"
+                                  onClick={() => handleLinkEvidence(indicator)}
+                                  disabled={
+                                    busyId === `evidence-${indicator.id}`
+                                  }
+                                >
+                                  Vincular
+                                </Button>
+                              </span>
+                            </Tooltip>
+                          </Box>
                         )}
                       </Box>
                     </>
@@ -1360,6 +1519,7 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
         programasInstitucionales={programasInstitucionales}
         indicadoresResultado={indicadoresResultado}
         respondeAs={respondeAs}
+        onCreateRespondeA={createRespondeA}
         usuarios={usuarios}
         periodos={periodos}
         metas={metas}
