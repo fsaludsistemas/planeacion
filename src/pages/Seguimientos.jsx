@@ -404,7 +404,9 @@ const Seguimientos = ({ data, userInfo }) => {
 
   const programaOptions = useMemo(() => {
     const rows = getIndicatorsExcept("programa");
-    const ids = new Set(rows.map((item) => String(item.id_programa_inst || "")));
+    const ids = new Set(
+      rows.map((item) => String(item.id_programa_inst || "")),
+    );
     return programasInstitucionales.filter((item) => ids.has(String(item.id)));
   }, [
     programasInstitucionales,
@@ -831,12 +833,18 @@ const Seguimientos = ({ data, userInfo }) => {
       ctx.strokeStyle = "#ffffff";
       ctx.beginPath();
       ctx.moveTo(cx, cy);
-      ctx.lineTo(cx + radius * Math.cos(-Math.PI / 2), cy + radius * Math.sin(-Math.PI / 2));
+      ctx.lineTo(
+        cx + radius * Math.cos(-Math.PI / 2),
+        cy + radius * Math.sin(-Math.PI / 2),
+      );
       ctx.stroke();
 
       ctx.beginPath();
       ctx.moveTo(cx, cy);
-      ctx.lineTo(cx + radius * Math.cos(-Math.PI / 2 + executedAngle), cy + radius * Math.sin(-Math.PI / 2 + executedAngle));
+      ctx.lineTo(
+        cx + radius * Math.cos(-Math.PI / 2 + executedAngle),
+        cy + radius * Math.sin(-Math.PI / 2 + executedAngle),
+      );
       ctx.stroke();
     }
 
@@ -848,13 +856,21 @@ const Seguimientos = ({ data, userInfo }) => {
     ctx.fillRect(lx, ly, 15, 15);
     ctx.fillStyle = "#000000";
     ctx.font = "bold 13px sans-serif";
-    ctx.fillText(`Ejecutado (${promedio.toFixed(1).replace(".", ",")}%)${promedio > 0 ? "" : " - 0%"}`, lx + 22, ly + 12);
+    ctx.fillText(
+      `Ejecutado (${promedio.toFixed(1).replace(".", ",")}%)${promedio > 0 ? "" : " - 0%"}`,
+      lx + 22,
+      ly + 12,
+    );
 
     ctx.fillStyle = "#F44336";
     ctx.fillRect(lx, ly + 25, 15, 15);
     ctx.fillStyle = "#000000";
     ctx.font = "bold 13px sans-serif";
-    ctx.fillText(`Pendiente (${pending.toFixed(1).replace(".", ",")}%)${pending > 0 ? "" : " - 0%"}`, lx + 22, ly + 37);
+    ctx.fillText(
+      `Pendiente (${pending.toFixed(1).replace(".", ",")}%)${pending > 0 ? "" : " - 0%"}`,
+      lx + 22,
+      ly + 37,
+    );
 
     const chartImgData = canvas.toDataURL("image/png");
     doc.addImage(chartImgData, "PNG", 20, currentY, 100, 50);
@@ -862,11 +878,7 @@ const Seguimientos = ({ data, userInfo }) => {
 
     // Contador de indicadores por color
     doc.setFontSize(12);
-    doc.text(
-      "Contador de indicadores y significado de colores",
-      20,
-      currentY,
-    );
+    doc.text("Contador de indicadores y significado de colores", 20, currentY);
 
     const colorData = [
       [
@@ -1131,6 +1143,11 @@ const Seguimientos = ({ data, userInfo }) => {
                   value="CNA"
                   control={<Radio size="small" />}
                   label="CNA"
+                />
+                <FormControlLabel
+                  value="DEP"
+                  control={<Radio size="small" />}
+                  label="DEP"
                 />
               </RadioGroup>
             </FormControl>
