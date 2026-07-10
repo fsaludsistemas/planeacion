@@ -1141,6 +1141,11 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
                 control={<Radio size="small" />}
                 label="CNA"
               />
+              <FormControlLabel
+                value="DEP"
+                control={<Radio size="small" />}
+                label="DEP"
+              />
             </RadioGroup>
           </FormControl>
         </Box>
