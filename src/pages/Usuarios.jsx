@@ -8,9 +8,13 @@ import {
   DialogContent,
   DialogTitle,
   FormControl,
+  FormControlLabel,
+  IconButton,
   InputLabel,
   MenuItem,
   Paper,
+  Radio,
+  RadioGroup,
   Select,
   Table,
   TableBody,
@@ -22,7 +26,9 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { createSheetRow } from "../api/api";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
+import { createSheetRow, deleteSheetRow, updateSheetRow } from "../api/api";
 
 const toText = (value) => String(value ?? "").trim() || "No disponible";
 const normalize = (value) =>
@@ -33,6 +39,13 @@ const normalize = (value) =>
 
 const sortById = (items) =>
   [...items].sort((a, b) => Number(a?.id ?? 0) - Number(b?.id ?? 0));
+
+const getTipoDependencia = (dependencia) => {
+  const value = normalize(dependencia?.tipo);
+  if (value === "escuela") return "Escuela";
+  if (value === "oficina") return "Oficina";
+  return "No definido";
+};
 
 const getSheet = (data, ...keys) => {
   for (const key of keys) {
@@ -51,13 +64,24 @@ function Usuarios({ data, userInfo }) {
   const [users, setUsers] = useState([]);
   const [dependencies, setDependencies] = useState([]);
   const [open, setOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [filterTipoDependencia, setFilterTipoDependencia] = useState("TODAS");
   const [form, setForm] = useState({
     correo: "",
     id_dependencia: "",
   });
+  const [editForm, setEditForm] = useState({
+    id: "",
+    correo: "",
+    id_dependencia: "",
+  });
+  const [selectedUser, setSelectedUser] = useState(null);
   const [atTooltipOpen, setAtTooltipOpen] = useState(false);
   const atTooltipTimerRef = useRef(null);
 
@@ -82,6 +106,14 @@ function Usuarios({ data, userInfo }) {
     [dependencies],
   );
 
+  const filteredUsers = useMemo(() => {
+    if (filterTipoDependencia === "TODAS") return users;
+    return users.filter((user) => {
+      const dep = dependencyById.get(String(user.id_dependencia));
+      return getTipoDependencia(dep) === filterTipoDependencia;
+    });
+  }, [users, filterTipoDependencia, dependencyById]);
+
   const resetForm = () => {
     setForm({
       correo: "",
@@ -99,6 +131,23 @@ function Usuarios({ data, userInfo }) {
     setOpen(false);
     setError("");
     setSuccess("");
+  };
+
+  const closeEditDialog = () => {
+    setEditOpen(false);
+    setSelectedUser(null);
+    setEditForm({
+      id: "",
+      correo: "",
+      id_dependencia: "",
+    });
+    setError("");
+  };
+
+  const closeDeleteDialog = () => {
+    setDeleteOpen(false);
+    setSelectedUser(null);
+    setError("");
   };
 
   const showAtTooltip = () => {
@@ -166,16 +215,115 @@ function Usuarios({ data, userInfo }) {
       );
       setSuccess("Usuario creado correctamente.");
       resetForm();
-      setOpen(true);
     } catch (err) {
       setError(
         err?.response?.data?.message ||
           err.message ||
           "No se pudo crear el usuario.",
       );
-      setOpen(true);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openEditDialog = (user) => {
+    setError("");
+    setSuccess("");
+    setSelectedUser(user);
+    setEditForm({
+      id: String(user?.id ?? ""),
+      correo: String(user?.correo ?? "").replace(
+        /@correounivalle\.edu\.co$/i,
+        "",
+      ),
+      id_dependencia: String(user?.id_dependencia ?? ""),
+    });
+    setEditOpen(true);
+  };
+
+  const handleEditChange = (field) => (event) => {
+    let value = event.target.value;
+    if (field === "correo") {
+      if (/@/.test(value)) {
+        showAtTooltip();
+      }
+      value = value.replace(/@/g, "");
+    }
+    setEditForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleEditSave = async () => {
+    setEditLoading(true);
+    setError("");
+    setSuccess("");
+    try {
+      const localPart = String(editForm.correo || "").trim();
+      const fullEmail = `${localPart}@correounivalle.edu.co`;
+      if (!localPart || !editForm.id_dependencia) {
+        throw new Error("Completa correo y dependencia.");
+      }
+
+      await updateSheetRow("USUARIOS", editForm.id, {
+        correo: fullEmail,
+        id_dependencia: String(editForm.id_dependencia),
+      });
+
+      setUsers((prev) =>
+        sortById(
+          prev.map((user) =>
+            String(user.id) === String(editForm.id)
+              ? {
+                  ...user,
+                  correo: fullEmail,
+                  id_dependencia: String(editForm.id_dependencia),
+                }
+              : user,
+          ),
+        ),
+      );
+      setSuccess("Usuario actualizado correctamente.");
+      closeEditDialog();
+    } catch (err) {
+      setError(
+        err?.response?.data?.message ||
+          err.message ||
+          "No se pudo actualizar el usuario.",
+      );
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const openDeleteDialog = (user) => {
+    setError("");
+    setSuccess("");
+    setSelectedUser(user);
+    setDeleteOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!selectedUser?.id) return;
+    setDeleteLoading(true);
+    setError("");
+    setSuccess("");
+    try {
+      await deleteSheetRow("USUARIOS", selectedUser.id);
+      setUsers((prev) =>
+        prev.filter((user) => String(user.id) !== String(selectedUser.id)),
+      );
+      setSuccess("Usuario eliminado correctamente.");
+      closeDeleteDialog();
+    } catch (err) {
+      setError(
+        err?.response?.data?.message ||
+          err.message ||
+          "No se pudo eliminar el usuario.",
+      );
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -208,9 +356,36 @@ function Usuarios({ data, userInfo }) {
             <Typography variant="h5" sx={{ fontWeight: 800 }}>
               Gestión de Usuarios
             </Typography>
+            
             <Typography variant="body2" color="text.secondary">
               Administra los usuarios del sistema.
             </Typography>
+            <FormControl>
+          <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5, mt: 2  }}>
+            Tipo de dependencia
+          </Typography>
+          <RadioGroup
+            row
+            value={filterTipoDependencia}
+            onChange={(e) => setFilterTipoDependencia(e.target.value)}
+          >
+            <FormControlLabel
+              value="TODAS"
+              control={<Radio size="small" />}
+              label="Todas"
+            />
+            <FormControlLabel
+              value="Oficina"
+              control={<Radio size="small" />}
+              label="Oficina"
+            />
+            <FormControlLabel
+              value="Escuela"
+              control={<Radio size="small" />}
+              label="Escuela"
+            />
+          </RadioGroup>
+        </FormControl>
           </Box>
           <Button variant="contained" onClick={handleOpen}>
             Crear usuario
@@ -229,6 +404,7 @@ function Usuarios({ data, userInfo }) {
         </Alert>
       )}
 
+      
       <TableContainer component={Paper}>
         <Table size="small">
           <TableHead>
@@ -237,10 +413,13 @@ function Usuarios({ data, userInfo }) {
               <TableCell sx={{ fontWeight: 700 }}>Correo</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Dependencia</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Rol</TableCell>
+              <TableCell sx={{ fontWeight: 700 }} align="right">
+                Acciones
+              </TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {users.map((user) => (
+            {filteredUsers.map((user) => (
               <TableRow key={user.id}>
                 <TableCell>{toText(user.id)}</TableCell>
                 <TableCell>{toText(user.correo)}</TableCell>
@@ -250,6 +429,26 @@ function Usuarios({ data, userInfo }) {
                   )}
                 </TableCell>
                 <TableCell>{toText(user.rol)}</TableCell>
+                <TableCell align="right">
+                  <Tooltip title="Editar usuario">
+                    <IconButton
+                      size="small"
+                      onClick={() => openEditDialog(user)}
+                      sx={{ mr: 0.5 }}
+                    >
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Eliminar usuario">
+                    <IconButton
+                      size="small"
+                      color="error"
+                      onClick={() => openDeleteDialog(user)}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -279,6 +478,8 @@ function Usuarios({ data, userInfo }) {
                     "& input": {
                       width: "48%",
                       minWidth: "48%",
+                      textAlign:"right",
+                      fontSize:"1.3rem",
                     },
                   },
                   endAdornment: (
@@ -322,6 +523,109 @@ function Usuarios({ data, userInfo }) {
           <Button onClick={handleClose}>Cerrar</Button>
           <Button variant="contained" onClick={handleSubmit} disabled={loading}>
             Guardar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={editOpen} onClose={closeEditDialog} fullWidth maxWidth="sm">
+        <DialogTitle>Editar usuario</DialogTitle>
+        <DialogContent dividers>
+          <Box sx={{ display: "grid", gap: 2 }}>
+            <TextField fullWidth label="ID" value={editForm.id} disabled />
+            <Tooltip
+              open={atTooltipOpen}
+              title="El @ ya está puesto"
+              placement="top"
+              arrow
+            >
+              <TextField
+                fullWidth
+                label="Correo"
+                helperText="@correounivalle.edu.co se agrega automáticamente"
+                value={editForm.correo}
+                onChange={handleEditChange("correo")}
+                onKeyDown={handleCorreoKeyDown}
+                InputProps={{
+                  sx: {
+                    position: "relative",
+                    "& input": {
+                      width: "48%",
+                      minWidth: "48%",
+                      textAlign: "right",
+                      fontSize: "1.3rem",
+                    },
+                  },
+                  endAdornment: (
+                    <Box
+                      component="span"
+                      sx={{
+                        position: "absolute",
+                        left: "50%",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        color: "text.secondary",
+                        fontSize: "1.3rem",
+                        pointerEvents: "none",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      @correounivalle.edu.co
+                    </Box>
+                  ),
+                }}
+              />
+            </Tooltip>
+            <FormControl fullWidth>
+              <InputLabel>Dependencia</InputLabel>
+              <Select
+                value={editForm.id_dependencia}
+                label="Dependencia"
+                onChange={handleEditChange("id_dependencia")}
+              >
+                <MenuItem value="">Seleccione una dependencia</MenuItem>
+                {dependencies.map((item) => (
+                  <MenuItem key={item.id} value={String(item.id)}>
+                    {toText(item.nombre)}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeEditDialog}>Cancelar</Button>
+          <Button
+            variant="contained"
+            onClick={handleEditSave}
+            disabled={editLoading}
+          >
+            Guardar cambios
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={deleteOpen}
+        onClose={closeDeleteDialog}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Eliminar usuario</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2">
+            ¿Seguro que deseas eliminar a{" "}
+            <strong>{toText(selectedUser?.correo)}</strong>?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeDeleteDialog}>Cancelar</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleDelete}
+            disabled={deleteLoading}
+          >
+            Eliminar
           </Button>
         </DialogActions>
       </Dialog>

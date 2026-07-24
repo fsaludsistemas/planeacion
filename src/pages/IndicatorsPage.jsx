@@ -67,6 +67,20 @@ const getSheet = (data, ...keys) => {
 const sortById = (items) =>
   [...items].sort((a, b) => Number(a?.id ?? 0) - Number(b?.id ?? 0));
 
+const sortIndicatorsByDependency = (items) =>
+  [...items].sort((a, b) => {
+    const depA = normalize(a?.dependencia?.nombre);
+    const depB = normalize(b?.dependencia?.nombre);
+
+    if (depA !== depB) {
+      return depA.localeCompare(depB, "es", { sensitivity: "base" });
+    }
+
+    const idA = Number(a?.id ?? 0);
+    const idB = Number(b?.id ?? 0);
+    return idA - idB;
+  });
+
 const getTipoDependencia = (dependencia) => {
   const value = normalize(dependencia?.tipo);
   if (value === "escuela") return "Escuela";
@@ -114,6 +128,37 @@ const getSheetEmbedUrl = (value) => {
   return url;
 };
 
+const parseNumericValue = (value) => {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  const normalized = raw.replace("%", "").replace(",", ".");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const formatPercentage = (value) => {
+  if (!Number.isFinite(value)) return "-";
+  const rounded = Math.round(value * 100) / 100;
+  return `${Number.isInteger(rounded) ? rounded : rounded.toFixed(2)}%`;
+};
+
+const getAvanceDisplay = (avanceValue, metaValue) => {
+  const avanceText = String(avanceValue ?? "").trim();
+  if (!avanceText) return "-";
+  if (avanceText.includes("%")) return avanceText;
+
+  const avanceNumber = parseNumericValue(avanceText);
+  const metaNumber = parseNumericValue(metaValue);
+
+  if (avanceNumber === null || metaNumber === null || metaNumber === 0) {
+    return avanceText;
+  }
+
+  return formatPercentage((avanceNumber / metaNumber) * 100);
+};
+
+const LAST_EXPANDED_INDICATOR_KEY = "indicators.lastExpandedId";
+
 const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
   const [filters, setFilters] = useState({
     dependencia: "",
@@ -141,6 +186,8 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
     url: "",
     indicatorName: "",
   });
+  const hasHydratedExpandedIdRef = useRef(false);
+  const scrollTimerRef = useRef(null);
   const logroSaveTimersRef = useRef({});
 
   useEffect(() => {
@@ -150,6 +197,31 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
       });
     };
   }, []);
+
+  useEffect(() => {
+    if (expandedId) {
+      sessionStorage.setItem(LAST_EXPANDED_INDICATOR_KEY, String(expandedId));
+      hasHydratedExpandedIdRef.current = true;
+    } else if (hasHydratedExpandedIdRef.current) {
+      sessionStorage.removeItem(LAST_EXPANDED_INDICATOR_KEY);
+    }
+  }, [expandedId]);
+
+  useEffect(() => {
+    if (!data || expandedId) return;
+    const storedExpandedId = sessionStorage.getItem(
+      LAST_EXPANDED_INDICATOR_KEY,
+    );
+    if (!storedExpandedId) return;
+
+    const exists = getSheet(data, "INDICADORES_PRODUCTO").some(
+      (indicator) => String(indicator?.id) === String(storedExpandedId),
+    );
+    if (exists) {
+      setExpandedId(String(storedExpandedId));
+      hasHydratedExpandedIdRef.current = true;
+    }
+  }, [data, expandedId]);
 
   const sessionUser = useMemo(() => {
     if (userInfo) return userInfo;
@@ -205,6 +277,26 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
     () => sortById(getSheet(data, EVIDENCES_SHEET_NAME)),
     [data],
   );
+
+  useEffect(() => {
+    if (!expandedId) return;
+    if (scrollTimerRef.current) {
+      clearTimeout(scrollTimerRef.current);
+    }
+    scrollTimerRef.current = setTimeout(() => {
+      const element = document.querySelector(
+        `[data-indicator-id="${expandedId}"]`,
+      );
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }, 100);
+    return () => {
+      if (scrollTimerRef.current) {
+        clearTimeout(scrollTimerRef.current);
+      }
+    };
+  }, [expandedId, indicators.length]);
 
   const byId = (items) => new Map(items.map((item) => [String(item.id), item]));
   const dependenciaById = useMemo(() => byId(dependencias), [dependencias]);
@@ -433,74 +525,6 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
     respondeAById,
   ]);
 
-  // Auto-clear filter values that are no longer present in the computed options
-  useEffect(() => {
-    setFilters((prev) => {
-      let changed = false;
-      const next = { ...prev };
-
-      if (
-        next.dependencia &&
-        !filterOptions.dependencias.some(
-          (d) => String(d.id) === next.dependencia,
-        )
-      ) {
-        next.dependencia = "";
-        changed = true;
-      }
-
-      if (
-        next.desafio &&
-        !filterOptions.desafios.some((d) => String(d.id) === next.desafio)
-      ) {
-        next.desafio = "";
-        changed = true;
-      }
-
-      if (
-        next.estrategiaConvergente &&
-        !filterOptions.estrategiasConvergentes.some(
-          (d) => String(d.id) === next.estrategiaConvergente,
-        )
-      ) {
-        next.estrategiaConvergente = "";
-        changed = true;
-      }
-
-      if (
-        next.estrategiaFacultad &&
-        !filterOptions.estrategiasFacultad.some(
-          (d) => String(d.id) === next.estrategiaFacultad,
-        )
-      ) {
-        next.estrategiaFacultad = "";
-        changed = true;
-      }
-
-      if (
-        next.programaInstitucional &&
-        !filterOptions.programasInstitucionales.some(
-          (d) => String(d.id) === next.programaInstitucional,
-        )
-      ) {
-        next.programaInstitucional = "";
-        changed = true;
-      }
-
-      if (
-        next.indicadorResultado &&
-        !filterOptions.indicadoresResultado.some(
-          (d) => String(d.id) === next.indicadorResultado,
-        )
-      ) {
-        next.indicadorResultado = "";
-        changed = true;
-      }
-
-      return changed ? next : prev;
-    });
-  }, [filterOptions]);
-
   const clearFilters = () => {
     setFilters({
       dependencia: "",
@@ -523,10 +547,14 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
 
   // filteredRows: visibleRows with ALL filters applied (used by JSX to render the list)
   const filteredRows = useMemo(
-    () => getRowsExcept(null),
+    () => sortIndicatorsByDependency(getRowsExcept(null)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [visibleRows, filters, respondeAById],
   );
+
+  const refreshData = async () => {
+    await onRefreshData?.();
+  };
 
   const updateIndicator = async (id, payload, { reload = true } = {}) => {
     setBusyId(String(id));
@@ -534,7 +562,7 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
     try {
       await updateSheetRow(SHEET_NAME, id, payload);
       if (reload) {
-        window.location.reload();
+        await refreshData();
       }
     } catch (error) {
       setActionError(
@@ -575,6 +603,10 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
   const openEvidenceSheet = (indicator) => {
     const url = getSavedEvidenceUrl(indicator) || getEvidenceUrl(indicator);
     if (!isGoogleSheetsUrl(url)) return;
+    sessionStorage.setItem(
+      LAST_EXPANDED_INDICATOR_KEY,
+      String(indicator.id),
+    );
     setSheetModalState({
       open: true,
       url,
@@ -634,7 +666,7 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
     setActionError("");
     try {
       await saveEvidenceUrl(indicator, nextValue);
-      window.location.reload();
+      await refreshData();
     } catch (error) {
       setActionError(
         error?.response?.data?.message ||
@@ -669,7 +701,7 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
         await saveEvidenceUrl(indicator, trimmedUrl);
       }
 
-      window.location.reload();
+      await refreshData();
     } catch (error) {
       setActionError(
         error?.response?.data?.message ||
@@ -933,7 +965,7 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
         );
       }
       setCreateOpen(false);
-      window.location.reload();
+      await refreshData();
     } catch (error) {
       setActionError(
         error?.response?.data?.message || "No se pudo crear el indicador.",
@@ -954,7 +986,7 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
     try {
       await deleteSheetRow(SHEET_NAME, indicator.id);
       setDetailsState({ open: false, indicator: null });
-      window.location.reload();
+      await refreshData();
     } catch (error) {
       setActionError(
         error?.response?.data?.message || "No se pudo eliminar el indicador.",
@@ -974,7 +1006,7 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
         <Box className="filters-header">
           <Box>
             <Typography variant="h5" sx={{ fontWeight: 800 }}>
-              Indicadores producto
+              Indicadores producto ({filteredRows.length})
             </Typography>
             <Typography variant="body2" sx={{ color: "text.secondary" }}>
               {filteredRows.length} de {visibleRows.length} indicadores visibles
@@ -1173,14 +1205,15 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
       </Paper>
 
       {filteredRows.map((indicator) => {
-        const isExpanded = expandedId === indicator.id;
+        const isExpanded = String(expandedId) === String(indicator.id);
         return (
           <Accordion
             key={indicator.id}
             className="indicator-accordion"
             expanded={isExpanded}
+            data-indicator-id={String(indicator.id)}
             onChange={(_, expanded) =>
-              setExpandedId(expanded ? indicator.id : null)
+              setExpandedId(expanded ? String(indicator.id) : null)
             }
           >
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
@@ -1214,7 +1247,10 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
                   sx={{ fontWeight: 700 }}
                   className="indicator-summary-dependency"
                 >
-                  {toText(indicator.avance?.avance_2026) || "-"}
+                  {getAvanceDisplay(
+                    indicator.avance?.avance_2026,
+                    indicator.meta?.meta_2026,
+                  )}
                 </Typography>
               </Box>
             </AccordionSummary>
@@ -1264,7 +1300,10 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
                         Porcentaje
                       </TableCell>
                       <TableCell sx={{ fontSize: "15px" }}>
-                        {toText(indicator.avance?.avance_2026)}
+                        {getAvanceDisplay(
+                          indicator.avance?.avance_2026,
+                          indicator.meta?.meta_2026,
+                        )}
                       </TableCell>
                       <TableCell sx={{ fontSize: "15px" }}>
                         {toText(indicator.avance?.total_trienio || "-")}
