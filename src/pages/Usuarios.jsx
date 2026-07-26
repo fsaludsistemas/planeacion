@@ -16,6 +16,7 @@ import {
   Radio,
   RadioGroup,
   Select,
+  Checkbox,
   Table,
   TableBody,
   TableCell,
@@ -28,7 +29,13 @@ import {
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
-import { createSheetRow, deleteSheetRow, updateSheetRow } from "../api/api";
+import {
+  createSheetRow,
+  deleteSheetRow,
+  sendEmail,
+  updateSheetRow,
+} from "../api/api";
+import EmailComposerDialog from "../components/EmailComposerDialog";
 
 const toText = (value) => String(value ?? "").trim() || "No disponible";
 const normalize = (value) =>
@@ -69,9 +76,13 @@ function Usuarios({ data, userInfo }) {
   const [loading, setLoading] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [emailLoading, setEmailLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [filterTipoDependencia, setFilterTipoDependencia] = useState("TODAS");
+  const [emailMode, setEmailMode] = useState(false);
+  const [emailComposerOpen, setEmailComposerOpen] = useState(false);
+  const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [form, setForm] = useState({
     correo: "",
     id_dependencia: "",
@@ -114,6 +125,11 @@ function Usuarios({ data, userInfo }) {
     });
   }, [users, filterTipoDependencia, dependencyById]);
 
+  const selectedUsers = useMemo(
+    () => users.filter((user) => selectedUserIds.includes(String(user.id))),
+    [users, selectedUserIds],
+  );
+
   const resetForm = () => {
     setForm({
       correo: "",
@@ -131,6 +147,12 @@ function Usuarios({ data, userInfo }) {
     setOpen(false);
     setError("");
     setSuccess("");
+  };
+
+  const stopEmailMode = () => {
+    setEmailMode(false);
+    setSelectedUserIds([]);
+    setEmailComposerOpen(false);
   };
 
   const closeEditDialog = () => {
@@ -304,6 +326,68 @@ function Usuarios({ data, userInfo }) {
     setDeleteOpen(true);
   };
 
+  const toggleSelectedUser = (userId) => {
+    setSelectedUserIds((prev) =>
+      prev.includes(String(userId))
+        ? prev.filter((id) => String(id) !== String(userId))
+        : [...prev, String(userId)],
+    );
+  };
+
+  const handleEmailModeToggle = () => {
+    setError("");
+    setSuccess("");
+    setEmailMode((prev) => {
+      const next = !prev;
+      if (!next) {
+        setSelectedUserIds([]);
+        setEmailComposerOpen(false);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllVisible = () => {
+    setSelectedUserIds((prev) => {
+      const visibleIds = filteredUsers.map((user) => String(user.id));
+      const merged = new Set(prev);
+      visibleIds.forEach((id) => merged.add(id));
+      return Array.from(merged);
+    });
+  };
+
+  const handleClearSelection = () => {
+    setSelectedUserIds([]);
+  };
+
+  const handleOpenEmailComposer = () => {
+    if (!selectedUsers.length) {
+      setError("Selecciona al menos un usuario para enviar el correo.");
+      return;
+    }
+    setError("");
+    setEmailComposerOpen(true);
+  };
+
+  const handleSendEmail = async (payload) => {
+    setEmailLoading(true);
+    setError("");
+    setSuccess("");
+    try {
+      await sendEmail(payload);
+      setSuccess("Correo enviado correctamente.");
+      stopEmailMode();
+    } catch (err) {
+      setError(
+        err?.response?.data?.message ||
+          err.message ||
+          "No se pudo enviar el correo.",
+      );
+    } finally {
+      setEmailLoading(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!selectedUser?.id) return;
     setDeleteLoading(true);
@@ -387,9 +471,31 @@ function Usuarios({ data, userInfo }) {
           </RadioGroup>
         </FormControl>
           </Box>
-          <Button variant="contained" onClick={handleOpen}>
-            Crear usuario
-          </Button>
+          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+            <Button variant="outlined" onClick={handleEmailModeToggle}>
+              {emailMode ? "Cancelar correo" : "Enviar correo"}
+            </Button>
+            {emailMode && (
+              <>
+                <Button variant="outlined" onClick={handleSelectAllVisible}>
+                  Seleccionar todos
+                </Button>
+                <Button variant="outlined" onClick={handleClearSelection}>
+                  Limpiar selección
+                </Button>
+                <Button
+                  variant="contained"
+                  onClick={handleOpenEmailComposer}
+                  disabled={!selectedUsers.length}
+                >
+                  Continuar con {selectedUsers.length} seleccionado
+                </Button>
+              </>
+            )}
+            <Button variant="contained" onClick={handleOpen}>
+              Crear usuario
+            </Button>
+          </Box>
         </Box>
       </Paper>
 
@@ -409,6 +515,7 @@ function Usuarios({ data, userInfo }) {
         <Table size="small">
           <TableHead>
             <TableRow>
+              {emailMode && <TableCell padding="checkbox" />}
               <TableCell sx={{ fontWeight: 700 }}>ID</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Correo</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Dependencia</TableCell>
@@ -421,6 +528,15 @@ function Usuarios({ data, userInfo }) {
           <TableBody>
             {filteredUsers.map((user) => (
               <TableRow key={user.id}>
+                {emailMode && (
+                  <TableCell padding="checkbox">
+                    <Checkbox
+                      size="small"
+                      checked={selectedUserIds.includes(String(user.id))}
+                      onChange={() => toggleSelectedUser(user.id)}
+                    />
+                  </TableCell>
+                )}
                 <TableCell>{toText(user.id)}</TableCell>
                 <TableCell>{toText(user.correo)}</TableCell>
                 <TableCell>
@@ -629,6 +745,14 @@ function Usuarios({ data, userInfo }) {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <EmailComposerDialog
+        open={emailComposerOpen}
+        users={selectedUsers}
+        loading={emailLoading}
+        onClose={() => setEmailComposerOpen(false)}
+        onSend={handleSendEmail}
+      />
     </Box>
   );
 }

@@ -61,4 +61,14 @@ export const deleteSheetRow = async (sheetName, id) => {
   }
 };
 
+export const sendEmail = async (payload) => {
+  try {
+    const response = await api.post("/send-email", payload);
+    return response.data;
+  } catch (error) {
+    console.error("Error sending email:", error);
+    throw error;
+  }
+};
+
 export default api;
