@@ -26,7 +26,7 @@ const toolbarOptions = [
 
 const DEFAULT_EMAIL_HTML = `<p>Cordial saludo esta es la plantilla de prueba,</p>
 		<p>Estimado profesor(a)s, </p>
-		<p>Para la Oficina de Planeacion de la Facultad de Salud es grato apoyar los procesos orientados al establecimiento de nuevas alianzas de cooperación académica internacional con instituciones de gran prestigio, las cuales contribuyen al fortalecimiento de la formación académica, investigativa y de extensión de nuestra comunidad universitaria.</p>
+		<p>Para la Oficina de Planeacion de la Facultad de Salud es grato apoyar los procesos orientados al establecimiento de los indicadores, los cuales contribuyen al fortalecimiento de la planeacion universitaria.</p>
 		<p>Adjuntamos documento donde se detalla el proceso para la creacion de indicadores para la plataforma de planeacion de la Facultad de Salud</a>.</p>
 		<p>Cualquier inquietud con gusto la atenderemos.</p>
 		<p>Cordialmente,</p>
