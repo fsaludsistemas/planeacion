@@ -24,19 +24,19 @@ const toolbarOptions = [
   ["link", "blockquote", "clean"],
 ];
 
-const DEFAULT_EMAIL_HTML = `<p>Cordial saludo,</p>
+const DEFAULT_EMAIL_HTML = `<p>Cordial saludo esta es la plantilla de prueba,</p>
 		<p>Estimado profesor(a)s, </p>
-		<p>Para la Oficina de Asuntos Internacionales de la Facultad de Salud es grato apoyar los procesos orientados al establecimiento de nuevas alianzas de cooperación académica internacional con instituciones de gran prestigio, las cuales contribuyen al fortalecimiento de la formación académica, investigativa y de extensión de nuestra comunidad universitaria.</p>
-		<p>Adjuntamos documento donde se detalla el proceso para la suscripción de Convenios Internacionales <a href="https://drive.google.com/file/d/1zEjWFj-rg8uK_RkB_-4SGVavAyi6TdA-/view?usp=sharing">(documento)</a>. Una vez haya diligenciado y suscrito el acta, recuerde por favor adjuntarla en <a href="https://internacionalizacion-salud.vercel.app/">la plataforma de convenios de la Facultad de Salud</a>.</p>
+		<p>Para la Oficina de Planeacion de la Facultad de Salud es grato apoyar los procesos orientados al establecimiento de nuevas alianzas de cooperación académica internacional con instituciones de gran prestigio, las cuales contribuyen al fortalecimiento de la formación académica, investigativa y de extensión de nuestra comunidad universitaria.</p>
+		<p>Adjuntamos documento donde se detalla el proceso para la creacion de indicadores para la plataforma de planeacion de la Facultad de Salud</a>.</p>
 		<p>Cualquier inquietud con gusto la atenderemos.</p>
 		<p>Cordialmente,</p>
-		<p style="margin:0px;" ><strong>Esther Cecilia Wilches Luna</strong></p>
+		<p style="margin:0px;" ><strong>Usuario prueba</strong></p>
 		<p style="margin:0px;">Coordinadora</p>
-		<p style="margin:0px;">Oficina de Asuntos Internacionales - Facultad de Salud</p>
+		<p style="margin:0px;">Oficina de Planeacion - Facultad de Salud</p>
 
-			<p style="margin-bottom:0px;"><strong>Mónica María Durán Salas</strong></p>
+			<p style="margin-bottom:0px;"><strong>Usuario de prueba</strong></p>
 			<p style="margin:0px;">Profesional</p>
-			<p style="margin:0px;">Oficina de Asuntos Internacionales - Facultad de Salud</p>
+			<p style="margin:0px;">Oficina de Planeacion - Facultad de Salud</p>
 			<p style="margin:0px;">Número telefónico: (57 - 602) 3212100 Ext. 4072</p>
 			<p style="margin:0px;">https://internacionalessalud.univalle.edu.co/movilidad-internacional</p>
 
