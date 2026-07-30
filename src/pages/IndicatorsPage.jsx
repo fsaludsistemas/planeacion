@@ -159,6 +159,158 @@ const getAvanceDisplay = (avanceValue, metaValue) => {
 
 const LAST_EXPANDED_INDICATOR_KEY = "indicators.lastExpandedId";
 
+const IndicatorQuickEditFields = React.memo(
+  ({
+    indicator,
+    canEditAllIndicators,
+    busyId,
+    isEvidenceLinked,
+    initialEvidenceUrl,
+    initialLogro,
+    onOpenEvidenceSheet,
+    onSaveEvidenceUrl,
+    onSaveLogro,
+  }) => {
+    const [evidenceUrl, setEvidenceUrl] = useState(initialEvidenceUrl);
+    const [logro, setLogro] = useState(initialLogro);
+    const saveLogroTimerRef = useRef(null);
+
+    useEffect(() => {
+      setEvidenceUrl(initialEvidenceUrl);
+    }, [initialEvidenceUrl, indicator.id]);
+
+    useEffect(() => {
+      setLogro(initialLogro);
+    }, [initialLogro, indicator.id]);
+
+    useEffect(() => {
+      return () => {
+        if (saveLogroTimerRef.current) {
+          clearTimeout(saveLogroTimerRef.current);
+        }
+      };
+    }, []);
+
+    const handleEvidenceUrlBlur = async () => {
+      await onSaveEvidenceUrl(indicator, evidenceUrl);
+    };
+
+    const handleLogroChange = (event) => {
+      const value = event.target.value;
+      setLogro(value);
+
+      if (saveLogroTimerRef.current) {
+        clearTimeout(saveLogroTimerRef.current);
+      }
+
+      saveLogroTimerRef.current = setTimeout(() => {
+        void onSaveLogro(indicator, value);
+      }, 900);
+    };
+
+    const handleLogroBlur = async () => {
+      if (saveLogroTimerRef.current) {
+        clearTimeout(saveLogroTimerRef.current);
+        saveLogroTimerRef.current = null;
+      }
+      await onSaveLogro(indicator, logro);
+    };
+
+    return (
+      <>
+        <Box sx={{ gridColumn: "1 / -1", width: "100%" }}>
+          {isEvidenceLinked ? (
+            <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+              <Tooltip title="Abrir sheet de evidencia">
+                <Typography
+                  component="span"
+                  onClick={() => onOpenEvidenceSheet(indicator)}
+                  sx={{
+                    flex: 1,
+                    color: "primary.main",
+                    textDecoration: "underline",
+                    cursor: "pointer",
+                    "&:hover": { color: "primary.dark" },
+                    width: "50%",
+                  }}
+                >
+                  URL documento evidencia
+                </Typography>
+              </Tooltip>
+              {canEditAllIndicators && (
+                <Tooltip title="La URL ya estÃ¡ vinculada">
+                  <span>
+                    <Button variant="contained" disabled>
+                      Vincular
+                    </Button>
+                  </span>
+                </Tooltip>
+              )}
+            </Box>
+          ) : (
+            <>
+              <Typography className="detail-label" sx={{ mb: 1 }}>
+                URL documento evidencia
+              </Typography>
+              <Box
+                sx={{
+                  width: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 1,
+                }}
+              >
+                <TextField
+                  fullWidth
+                  size="small"
+                  placeholder="URL del documento de evidencia"
+                  value={evidenceUrl}
+                  onChange={(event) => setEvidenceUrl(event.target.value)}
+                  onBlur={handleEvidenceUrlBlur}
+                  disabled={!canEditAllIndicators}
+                  sx={{ width: "100%" }}
+                />
+                {canEditAllIndicators && (
+                  <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+                    <Tooltip title="Vincular URL de evidencia">
+                      <span>
+                        <Button
+                          variant="contained"
+                          onClick={() =>
+                            onSaveEvidenceUrl(indicator, evidenceUrl)
+                          }
+                          disabled={busyId === `evidence-${indicator.id}`}
+                        >
+                          Vincular
+                        </Button>
+                      </span>
+                    </Tooltip>
+                  </Box>
+                )}
+              </Box>
+            </>
+          )}
+        </Box>
+        <Box sx={{ gridColumn: "1 / -1" }}>
+          <Typography className="detail-label" sx={{ mb: 1 }}>
+            Descripción de Logro
+          </Typography>
+          <TextField
+            fullWidth
+            size="small"
+            multiline
+            minRows={4}
+            placeholder="Logro"
+            value={logro}
+            onChange={handleLogroChange}
+            onBlur={handleLogroBlur}
+          />
+        </Box>
+      </>
+    );
+  },
+);
+
 const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
   const [filters, setFilters] = useState({
     dependencia: "",
@@ -179,8 +331,6 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
   const [expandedId, setExpandedId] = useState(null);
   const [actionError, setActionError] = useState("");
   const [busyId, setBusyId] = useState("");
-  const [evidenceUrls, setEvidenceUrls] = useState({});
-  const [logroValues, setLogroValues] = useState({});
   const [sheetModalState, setSheetModalState] = useState({
     open: false,
     url: "",
@@ -188,15 +338,6 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
   });
   const hasHydratedExpandedIdRef = useRef(false);
   const scrollTimerRef = useRef(null);
-  const logroSaveTimersRef = useRef({});
-
-  useEffect(() => {
-    return () => {
-      Object.values(logroSaveTimersRef.current).forEach((timerId) => {
-        if (timerId) clearTimeout(timerId);
-      });
-    };
-  }, []);
 
   useEffect(() => {
     if (expandedId) {
@@ -588,8 +729,6 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
     isGoogleSheetsUrl(getSavedEvidenceUrl(indicator));
 
   const getEvidenceUrl = (indicator) => {
-    const storedValue = evidenceUrls[String(indicator.id)];
-    if (storedValue !== undefined) return storedValue;
     const evidencia = evidenciaByIndicatorId.get(String(indicator.id));
     const yearKey = `url_${EVIDENCE_YEAR}`;
     return String(
@@ -603,10 +742,7 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
   const openEvidenceSheet = (indicator) => {
     const url = getSavedEvidenceUrl(indicator) || getEvidenceUrl(indicator);
     if (!isGoogleSheetsUrl(url)) return;
-    sessionStorage.setItem(
-      LAST_EXPANDED_INDICATOR_KEY,
-      String(indicator.id),
-    );
+    sessionStorage.setItem(LAST_EXPANDED_INDICATOR_KEY, String(indicator.id));
     setSheetModalState({
       open: true,
       url,
@@ -626,56 +762,6 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
 
     const yearKey = `url_${EVIDENCE_YEAR}`;
     await saveEvidenceRow(String(indicator.id), yearKey, trimmed);
-  };
-
-  const handleEvidenceUrlChange = (indicatorId) => (event) => {
-    const value = event.target.value;
-    setEvidenceUrls((prev) => ({
-      ...prev,
-      [String(indicatorId)]: value,
-    }));
-  };
-
-  const handleEvidenceUrlBlur = (indicator) => async () => {
-    const nextValue = getEvidenceUrl(indicator).trim();
-    if (!nextValue) return;
-
-    if (!isGoogleSheetsUrl(nextValue)) {
-      setActionError(
-        "La URL de evidencia debe ser un enlace de Google Sheets.",
-      );
-      return;
-    }
-  };
-
-  const handleLinkEvidence = async (indicator) => {
-    const nextValue = getEvidenceUrl(indicator).trim();
-    if (!nextValue) {
-      setActionError("Escribe una URL antes de vincularla.");
-      return;
-    }
-
-    if (!isGoogleSheetsUrl(nextValue)) {
-      setActionError(
-        "La URL de evidencia debe ser un enlace de Google Sheets.",
-      );
-      return;
-    }
-
-    setBusyId(`evidence-${indicator.id}`);
-    setActionError("");
-    try {
-      await saveEvidenceUrl(indicator, nextValue);
-      await refreshData();
-    } catch (error) {
-      setActionError(
-        error?.response?.data?.message ||
-          error.message ||
-          "No se pudo vincular la URL de evidencia.",
-      );
-    } finally {
-      setBusyId("");
-    }
   };
 
   const handleEditIndicator = async (indicator, form) => {
@@ -715,59 +801,15 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
 
   const closeSheetModal = () => {
     setSheetModalState({ open: false, url: "", indicatorName: "" });
-    setLogroValues({});
-    setEvidenceUrls({});
     void onRefreshData?.();
   };
 
   const getLogroValue = (indicator) => {
-    const storedValue = logroValues[String(indicator.id)];
-    if (storedValue !== undefined) return storedValue;
     return String(indicator?.logro ?? "");
   };
 
-  const handleLogroChange = (indicatorId) => (event) => {
-    const value = event.target.value;
-    setLogroValues((prev) => ({
-      ...prev,
-      [String(indicatorId)]: value,
-    }));
-
-    const timerKey = String(indicatorId);
-    if (logroSaveTimersRef.current[timerKey]) {
-      clearTimeout(logroSaveTimersRef.current[timerKey]);
-    }
-    logroSaveTimersRef.current[timerKey] = setTimeout(() => {
-      void (async () => {
-        try {
-          const nextValue = String(value ?? "").trim();
-          if (!nextValue) {
-            await updateIndicator(
-              indicatorId,
-              { logro: "" },
-              { reload: false },
-            );
-            return;
-          }
-          await updateIndicator(
-            indicatorId,
-            { logro: nextValue },
-            { reload: false },
-          );
-        } finally {
-          delete logroSaveTimersRef.current[timerKey];
-        }
-      })();
-    }, 900);
-  };
-
-  const handleLogroBlur = (indicator) => async () => {
-    const timerKey = String(indicator.id);
-    if (logroSaveTimersRef.current[timerKey]) {
-      clearTimeout(logroSaveTimersRef.current[timerKey]);
-      delete logroSaveTimersRef.current[timerKey];
-    }
-    const nextValue = getLogroValue(indicator).trim();
+  const handleSaveLogro = async (indicator, value) => {
+    const nextValue = String(value ?? "").trim();
     const currentValue = String(indicator?.logro ?? "").trim();
 
     if (nextValue === currentValue) return;
@@ -1321,96 +1363,42 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
                   alignItems: "start",
                 }}
               >
-                <Box sx={{ width: "100%" }}>
-                  {isEvidenceLinked(indicator) ? (
-                    <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-                      <Tooltip title="Abrir sheet de evidencia">
-                        <Typography
-                          component="span"
-                          onClick={() => openEvidenceSheet(indicator)}
-                          sx={{
-                            flex: 1,
-                            color: "primary.main",
-                            textDecoration: "underline",
-                            cursor: "pointer",
-                            "&:hover": { color: "primary.dark" },
-                            width: "50%",
-                          }}
-                        >
-                          URL documento evidencia
-                        </Typography>
-                      </Tooltip>
-                      {canEditAllIndicators && (
-                        <Tooltip title="La URL ya está vinculada">
-                          <span>
-                            <Button variant="contained" disabled>
-                              Vincular
-                            </Button>
-                          </span>
-                        </Tooltip>
-                      )}
-                    </Box>
-                  ) : (
-                    <>
-                      <Typography className="detail-label" sx={{ mb: 1 }}>
-                        URL documento evidencia
-                      </Typography>
-                      <Box
-                        sx={{
-                          width: "415%",
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 1,
-                        }}
-                      >
-                        <TextField
-                          fullWidth
-                          size="small"
-                          placeholder="URL del documento de evidencia"
-                          value={getEvidenceUrl(indicator)}
-                          onChange={handleEvidenceUrlChange(indicator.id)}
-                          onBlur={handleEvidenceUrlBlur(indicator)}
-                          disabled={!canEditAllIndicators}
-                          sx={{ width: "100%" }}
-                        />
-                        {canEditAllIndicators && (
-                          <Box
-                            sx={{ display: "flex", justifyContent: "flex-end" }}
-                          >
-                            <Tooltip title="Vincular URL de evidencia">
-                              <span>
-                                <Button
-                                  variant="contained"
-                                  onClick={() => handleLinkEvidence(indicator)}
-                                  disabled={
-                                    busyId === `evidence-${indicator.id}`
-                                  }
-                                >
-                                  Vincular
-                                </Button>
-                              </span>
-                            </Tooltip>
-                          </Box>
-                        )}
-                      </Box>
-                    </>
-                  )}
-                </Box>
-                <Box sx={{ gridColumn: "1 / -1" }}>
-                  <Typography className="detail-label" sx={{ mb: 1 }}>
-                    Descripción de Logro
-                  </Typography>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    multiline
-                    minRows={4}
-                    placeholder="Logro"
-                    value={getLogroValue(indicator)}
-                    onChange={handleLogroChange(indicator.id)}
-                    onBlur={handleLogroBlur(indicator)}
-                  />
-                </Box>
+                <IndicatorQuickEditFields
+                  indicator={indicator}
+                  canEditAllIndicators={canEditAllIndicators}
+                  busyId={busyId}
+                  isEvidenceLinked={isEvidenceLinked(indicator)}
+                  initialEvidenceUrl={getEvidenceUrl(indicator)}
+                  initialLogro={getLogroValue(indicator)}
+                  onOpenEvidenceSheet={openEvidenceSheet}
+                  onSaveEvidenceUrl={async (currentIndicator, value) => {
+                    const nextValue = String(value ?? "").trim();
+                    if (!nextValue) return;
+
+                    if (!isGoogleSheetsUrl(nextValue)) {
+                      setActionError(
+                        "La URL de evidencia debe ser un enlace de Google Sheets.",
+                      );
+                      return;
+                    }
+
+                    setBusyId(`evidence-${currentIndicator.id}`);
+                    setActionError("");
+                    try {
+                      await saveEvidenceUrl(currentIndicator, nextValue);
+                      await refreshData();
+                    } catch (error) {
+                      setActionError(
+                        error?.response?.data?.message ||
+                          error.message ||
+                          "No se pudo vincular la URL de evidencia.",
+                      );
+                    } finally {
+                      setBusyId("");
+                    }
+                  }}
+                  onSaveLogro={handleSaveLogro}
+                />
               </Box>
               <Box
                 sx={{
