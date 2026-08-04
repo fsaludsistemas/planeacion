@@ -7,6 +7,7 @@ import GoogleLogin from "./components/GoogleLogin";
 import IndicatorsPage from "./pages/IndicatorsPage";
 import Usuarios from "./pages/Usuarios";
 import Seguimientos from "./pages/Seguimientos";
+import Consolidados from "./pages/Consolidados";
 import { getData } from "./api/api";
 import "./App.css";
 
@@ -155,12 +156,7 @@ const App = () => {
     const seguimientosTab = canManageUsers ? 3 : 2;
 
     if (currentTab === consolidationTab) {
-      return (
-        <Box sx={{ padding: "20px 0" }}>
-          <Typography variant="h6">Consolidado Ind.</Typography>
-          <Typography variant="body2">Módulo en desarrollo.</Typography>
-        </Box>
-      );
+      return <Consolidados data={appData} userInfo={userInfo} />;
     }
 
     if (currentTab === seguimientosTab) {

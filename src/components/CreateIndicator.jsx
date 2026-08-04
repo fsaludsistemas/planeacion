@@ -10,6 +10,11 @@ import {
   Grid,
   MenuItem,
   TextField,
+  Radio,
+  RadioGroup,
+  FormControl,
+  FormLabel,
+  InputAdornment,
 } from "@mui/material";
 
 const emptyForm = {
@@ -59,6 +64,7 @@ const CreateIndicator = ({
   const [respondeADraft, setRespondeADraft] = useState("");
   const [respondeAItems, setRespondeAItems] = useState(respondeAs);
   const [respondeAError, setRespondeAError] = useState("");
+  const [metaType, setMetaType] = useState("");
 
   useEffect(() => {
     if (open) {
@@ -67,6 +73,7 @@ const CreateIndicator = ({
       setRespondeADraft("");
       setRespondeAError("");
       setRespondeAItems(respondeAs);
+      setMetaType("");
     }
   }, [open, respondeAs]);
 
@@ -242,7 +249,20 @@ const CreateIndicator = ({
   };
 
   const submit = () => {
-    onSubmit(form);
+    const formatMeta = (val) => {
+      if (val === "") return val;
+      return metaType === "percentage" ? `${val}%` : val;
+    };
+    
+    onSubmit({
+      ...form,
+      meta_2025: formatMeta(form.meta_2025),
+      meta_2026: formatMeta(form.meta_2026),
+      meta_2027: formatMeta(form.meta_2027),
+      meta_2028: formatMeta(form.meta_2028),
+      meta_2029: formatMeta(form.meta_2029),
+      meta_2030: formatMeta(form.meta_2030),
+    });
   };
 
   return (
@@ -433,14 +453,31 @@ const CreateIndicator = ({
                 label="Suma facultad"
               />
             </Grid>
+            <Grid item xs={12} md={12}>
+              <FormControl component="fieldset" sx={{ mt: 1 }}>
+                <FormLabel component="legend">Tipo de metas</FormLabel>
+                <RadioGroup
+                  row
+                  value={metaType}
+                  onChange={(e) => setMetaType(e.target.value)}
+                >
+                  <FormControlLabel value="number" control={<Radio />} label="Número" />
+                  <FormControlLabel value="percentage" control={<Radio />} label="Porcentaje" />
+                </RadioGroup>
+              </FormControl>
+            </Grid>
             <Grid item xs={8} md={2}>
               <TextField
                 fullWidth
                 label="Meta 2025"
                 type="number"
                 inputProps={{ step: "any" }}
+                InputProps={{
+                  endAdornment: metaType === "percentage" ? <InputAdornment position="end">%</InputAdornment> : null,
+                }}
                 value={form.meta_2025}
                 onChange={handleMetaChange("meta_2025")}
+                disabled={!metaType}
               />
             </Grid>
             <Grid item xs={8} md={2}>
@@ -449,8 +486,12 @@ const CreateIndicator = ({
                 label="Meta 2026"
                 type="number"
                 inputProps={{ step: "any" }}
+                InputProps={{
+                  endAdornment: metaType === "percentage" ? <InputAdornment position="end">%</InputAdornment> : null,
+                }}
                 value={form.meta_2026}
                 onChange={handleMetaChange("meta_2026")}
+                disabled={!metaType}
               />
             </Grid>
             <Grid item xs={8} md={2}>
@@ -459,8 +500,12 @@ const CreateIndicator = ({
                 label="Meta 2027"
                 type="number"
                 inputProps={{ step: "any" }}
+                InputProps={{
+                  endAdornment: metaType === "percentage" ? <InputAdornment position="end">%</InputAdornment> : null,
+                }}
                 value={form.meta_2027}
                 onChange={handleMetaChange("meta_2027")}
+                disabled={!metaType}
               />
             </Grid>
             <Grid item xs={8} md={2}>
@@ -469,8 +514,12 @@ const CreateIndicator = ({
                 label="Meta 2028"
                 type="number"
                 inputProps={{ step: "any" }}
+                InputProps={{
+                  endAdornment: metaType === "percentage" ? <InputAdornment position="end">%</InputAdornment> : null,
+                }}
                 value={form.meta_2028}
                 onChange={handleMetaChange("meta_2028")}
+                disabled={!metaType}
               />
             </Grid>
             <Grid item xs={8} md={2}>
@@ -479,8 +528,12 @@ const CreateIndicator = ({
                 label="Meta 2029"
                 type="number"
                 inputProps={{ step: "any" }}
+                InputProps={{
+                  endAdornment: metaType === "percentage" ? <InputAdornment position="end">%</InputAdornment> : null,
+                }}
                 value={form.meta_2029}
                 onChange={handleMetaChange("meta_2029")}
+                disabled={!metaType}
               />
             </Grid>
             <Grid item xs={8} md={2}>
@@ -489,8 +542,12 @@ const CreateIndicator = ({
                 label="Meta 2030"
                 type="number"
                 inputProps={{ step: "any" }}
+                InputProps={{
+                  endAdornment: metaType === "percentage" ? <InputAdornment position="end">%</InputAdornment> : null,
+                }}
                 value={form.meta_2030}
                 onChange={handleMetaChange("meta_2030")}
+                disabled={!metaType}
               />
             </Grid>
           </Grid>
