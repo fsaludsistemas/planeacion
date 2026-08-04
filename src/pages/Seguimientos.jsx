@@ -25,6 +25,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
 const toText = (value) => String(value ?? "").trim() || "No disponible";
+const toTextOrBlank = (value) => String(value ?? "").trim();
 const normalize = (value) =>
   String(value ?? "")
     .trim()
@@ -46,10 +47,26 @@ const limpiarPorcentaje = (dato) => {
   return parseFloat(dato);
 };
 
-const formatPercent = (value) => {
-  const number = toNumber(value);
-  if (number === null) return "No disponible";
-  return `${number}%`;
+const formatRawValue = (value, fallback = "Sin registro") => {
+  const text = String(value ?? "").trim();
+  return text || fallback;
+};
+
+const parseSheetNumber = (value) => {
+  if (value == "Sin registro") return "Sin registro";
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+  const normalized = text.replace("%", "").replace(",", ".");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const formatExecutionPercent = (plannedValue, executedValue) => {
+  const planned = parseSheetNumber(plannedValue);
+  const executed = parseSheetNumber(executedValue);
+  if (planned === null || executed === null || planned === 0)
+    return "Sin registro";
+  return `${((executed / planned) * 100).toFixed(1).replace(".", ",")}%`;
 };
 
 const sortById = (items) =>
@@ -300,6 +317,9 @@ const Seguimientos = ({ data, userInfo }) => {
     const grouped = new Map();
     filterableIndicators.forEach((indicator) => {
       const desafio = desafioById.get(String(indicator.id_desafio || ""));
+      const dependency = tipoDependenciaById.get(
+        String(indicator.id_dependencia || ""),
+      );
       if (!desafio) return;
       const meta = metaByIndicatorId.get(String(indicator.id));
       const avance = avanceByIndicatorId.get(String(indicator.id));
@@ -310,17 +330,49 @@ const Seguimientos = ({ data, userInfo }) => {
         desafio,
         indicators: [],
       };
-      existing.indicators.push({
-        ...indicator,
-        metaValue,
-        avanceValue,
-      });
+
+      const normalizedName = normalize(indicator.nombre);
+      const existingInd = existing.indicators.find(
+        (i) => normalize(i.nombre) === normalizedName
+      );
+
+      if (existingInd) {
+        const getSafeNumber = (val) => {
+          const parsed = parseSheetNumber(val);
+          return typeof parsed === "number" ? parsed : 0;
+        };
+
+        const sumMeta = getSafeNumber(existingInd.metaValue) + getSafeNumber(metaValue);
+        const sumAvance = getSafeNumber(existingInd.avanceValue) + getSafeNumber(avanceValue);
+
+        existingInd.metaValue = sumMeta;
+        existingInd.avanceValue = sumAvance;
+        existingInd.executionPercent = formatExecutionPercent(sumMeta, sumAvance);
+
+        if (dependency?.nombre && existingInd.dependencyName !== dependency.nombre) {
+          if (!existingInd.dependencyName) {
+            existingInd.dependencyName = dependency.nombre;
+          } else if (!existingInd.dependencyName.includes(dependency.nombre)) {
+            existingInd.dependencyName += `, ${dependency.nombre}`;
+          }
+        }
+      } else {
+        existing.indicators.push({
+          ...indicator,
+          dependencyName: dependency?.nombre,
+          metaValue,
+          avanceValue,
+          executionPercent: formatExecutionPercent(metaValue, avanceValue),
+        });
+      }
+
       grouped.set(String(desafio.id), existing);
     });
     return [...grouped.values()];
   }, [
     filterableIndicators,
     desafioById,
+    tipoDependenciaById,
     metaByIndicatorId,
     avanceByIndicatorId,
     selectedYear,
@@ -507,25 +559,37 @@ const Seguimientos = ({ data, userInfo }) => {
   };
 
   const totals = useMemo(() => {
-    let totalIndicadores = 0;
+    let totalIndicadoresValidos = 0;
+    let totalIndicadoresGeneral = 0;
+
     const executed = rowsByDesafio.reduce((sum, group) => {
+      totalIndicadoresGeneral += group.indicators.length;
       return (
         sum +
         group.indicators.reduce((inner, indicator) => {
-          let valorLimpio = String(indicator.avanceValue)
-            .replace("%", "")
-            .replace(",", ".")
-            .trim();
-          let numero = parseFloat(valorLimpio);
-          totalIndicadores++;
-          return inner + (numero ?? 0);
+          const numero = parseSheetNumber(indicator.executionPercent);
+          if (typeof numero !== "number") return inner;
+          totalIndicadoresValidos++;
+          return inner + numero;
         }, 0)
       );
     }, 0);
-    const promedio = executed / totalIndicadores;
+
+    const promedio = totalIndicadoresValidos ? executed / totalIndicadoresValidos : 0;
+    const pendingPorcentaje = Math.max(0, 100 - promedio);
+
+    const sinRegistroCount = totalIndicadoresGeneral - totalIndicadoresValidos;
+    const sinRegistro = totalIndicadoresGeneral ? (sinRegistroCount / totalIndicadoresGeneral) * 100 : 0;
+    const pesoValidos = totalIndicadoresGeneral ? (totalIndicadoresValidos / totalIndicadoresGeneral) : 0;
+
     return {
       promedio,
-      pending: Math.max(0, 100 - promedio),
+      pending: pendingPorcentaje,
+      chartData: {
+        ejecutado: promedio * pesoValidos,
+        pendiente: pendingPorcentaje * pesoValidos,
+        sinRegistro: sinRegistro,
+      },
     };
   }, [rowsByDesafio]);
 
@@ -541,18 +605,29 @@ const Seguimientos = ({ data, userInfo }) => {
   const indicatorColorCounts = useMemo(() => {
     return filterableIndicators.reduce(
       (acc, indicator) => {
-        const value = limpiarPorcentaje(
-          avanceByIndicatorId.get(String(indicator.id))?.[
-            `avance_${selectedYear}`
-          ],
+        const meta = metaByIndicatorId.get(String(indicator.id));
+        const avance = avanceByIndicatorId.get(String(indicator.id));
+        const value = parseSheetNumber(
+          formatExecutionPercent(
+            meta ? meta[`meta_${selectedYear}`] : null,
+            avance ? avance[`avance_${selectedYear}`] : null,
+          ),
         );
+        if (value === null) return acc;
         if (value >= 90) acc.superior += 1;
         else if (value >= 50) acc.alto += 1;
         else if (value >= 30) acc.medio += 1;
         else if (value >= 0) acc.bajo += 1;
+        else if (
+          value == "Sin registro" ||
+          value === "sin registro" ||
+          value === "" ||
+          value === null
+        )
+          acc.sinRegistro += 1;
         return acc;
       },
-      { superior: 0, alto: 0, medio: 0, bajo: 0 },
+      { superior: 0, alto: 0, medio: 0, bajo: 0, sinRegistro: 0 },
     );
   }, [filterableIndicators, avanceByIndicatorId, selectedYear]);
 
@@ -656,8 +731,10 @@ const Seguimientos = ({ data, userInfo }) => {
         tableData.push([
           index === 0 ? toText(group.desafio.titulo) : "",
           toText(indicator.nombre),
-          formatPercent(indicator.metaValue),
-          indicator.avanceValue,
+          toTextOrBlank(indicator.dependencyName),
+          formatRawValue(indicator.metaValue),
+          formatRawValue(indicator.avanceValue),
+          indicator.executionPercent,
         ]);
       });
     });
@@ -665,14 +742,18 @@ const Seguimientos = ({ data, userInfo }) => {
     // Agregar filas de totales
     tableData.push([
       "",
+      "",
       "Total porcentaje ejecutado",
+      "",
       "",
       `${totals.promedio.toFixed(1).replace(".", ",")}%`,
     ]);
 
     tableData.push([
       "",
+      "",
       "Pendiente por ejecutar",
+      "",
       "",
       `${totals.pending.toFixed(1).replace(".", ",")}%`,
     ]);
@@ -681,7 +762,14 @@ const Seguimientos = ({ data, userInfo }) => {
     autoTable(doc, {
       startY: yPosition,
       head: [
-        ["Desafío", "Nombre Indicador", "Meta Planeada", "Meta Ejecutada"],
+        [
+          "Desafío",
+          "Nombre Indicador",
+          "Dependencia",
+          "Meta Planeada",
+          "Meta Ejecutada",
+          "Meta Ejecutada %",
+        ],
       ],
       body: tableData,
       theme: "grid",
@@ -697,12 +785,14 @@ const Seguimientos = ({ data, userInfo }) => {
       columnStyles: {
         0: { cellWidth: "auto" },
         1: { cellWidth: "auto" },
-        2: { cellWidth: 30 },
+        2: { cellWidth: "auto" },
         3: { cellWidth: 30 },
+        4: { cellWidth: 30 },
+        5: { cellWidth: 28 },
       },
       // Colorear celdas de porcentaje
       didDrawCell: function (data) {
-        if (data.column.index === 3 && data.row.index < tableData.length - 3) {
+        if (data.column.index === 5 && data.row.index < tableData.length - 3) {
           const value = data.cell.raw;
           if (value && value !== "") {
             const cleanValue = String(value)
@@ -806,70 +896,99 @@ const Seguimientos = ({ data, userInfo }) => {
     const cx = 100;
     const cy = 100;
     const radius = 80;
-    const promedio = totals.promedio || 0;
-    const pending = totals.pending || 0;
-    const totalVal = promedio + pending || 100;
-    const executedAngle = (promedio / totalVal) * 2 * Math.PI;
+    
+    const ejecutado = totals.chartData?.ejecutado || 0;
+    const pendiente = totals.chartData?.pendiente || 0;
+    const sinRegistro = totals.chartData?.sinRegistro || 0;
+    
+    const executedAngle = (ejecutado / 100) * 2 * Math.PI;
+    const pendingAngle = (pendiente / 100) * 2 * Math.PI;
+    const sinRegistroAngle = (sinRegistro / 100) * 2 * Math.PI;
+
+    let currentAngle = -Math.PI / 2;
 
     // Porcentaje ejecutado (verde)
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + executedAngle);
-    ctx.closePath();
-    ctx.fillStyle = "#4CAF50";
-    ctx.fill();
+    if (ejecutado > 0) {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, radius, currentAngle, currentAngle + executedAngle);
+      ctx.closePath();
+      ctx.fillStyle = "#4CAF50";
+      ctx.fill();
+      currentAngle += executedAngle;
+    }
 
     // Porcentaje pendiente (rojo)
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, radius, -Math.PI / 2 + executedAngle, 1.5 * Math.PI);
-    ctx.closePath();
-    ctx.fillStyle = "#F44336";
-    ctx.fill();
-
-    // Líneas divisorias blancas
-    if (promedio > 0 && pending > 0) {
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = "#ffffff";
+    if (pendiente > 0) {
       ctx.beginPath();
       ctx.moveTo(cx, cy);
-      ctx.lineTo(
-        cx + radius * Math.cos(-Math.PI / 2),
-        cy + radius * Math.sin(-Math.PI / 2),
-      );
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.lineTo(
-        cx + radius * Math.cos(-Math.PI / 2 + executedAngle),
-        cy + radius * Math.sin(-Math.PI / 2 + executedAngle),
-      );
-      ctx.stroke();
+      ctx.arc(cx, cy, radius, currentAngle, currentAngle + pendingAngle);
+      ctx.closePath();
+      ctx.fillStyle = "#F44336";
+      ctx.fill();
+      currentAngle += pendingAngle;
     }
+
+    // Porcentaje sin registro (gris)
+    if (sinRegistro > 0) {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, radius, currentAngle, currentAngle + sinRegistroAngle);
+      ctx.closePath();
+      ctx.fillStyle = "#9E9E9E";
+      ctx.fill();
+      currentAngle += sinRegistroAngle;
+    }
+
+    // Líneas divisorias blancas (simples)
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#ffffff";
+    let lineAngle = -Math.PI / 2;
+    [executedAngle, pendingAngle, sinRegistroAngle].forEach(angle => {
+      if (angle > 0) {
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(
+          cx + radius * Math.cos(lineAngle),
+          cy + radius * Math.sin(lineAngle),
+        );
+        ctx.stroke();
+        lineAngle += angle;
+      }
+    });
 
     // Leyenda
     const lx = 220;
-    const ly = 80;
+    let ly = 60;
 
     ctx.fillStyle = "#4CAF50";
     ctx.fillRect(lx, ly, 15, 15);
     ctx.fillStyle = "#000000";
     ctx.font = "bold 13px sans-serif";
     ctx.fillText(
-      `Ejecutado (${promedio.toFixed(1).replace(".", ",")}%)${promedio > 0 ? "" : " - 0%"}`,
+      `Ejecutado (${ejecutado.toFixed(1).replace(".", ",")}%)`,
       lx + 22,
       ly + 12,
     );
 
+    ly += 25;
     ctx.fillStyle = "#F44336";
-    ctx.fillRect(lx, ly + 25, 15, 15);
+    ctx.fillRect(lx, ly, 15, 15);
     ctx.fillStyle = "#000000";
-    ctx.font = "bold 13px sans-serif";
     ctx.fillText(
-      `Pendiente (${pending.toFixed(1).replace(".", ",")}%)${pending > 0 ? "" : " - 0%"}`,
+      `Pendiente (${pendiente.toFixed(1).replace(".", ",")}%)`,
       lx + 22,
-      ly + 37,
+      ly + 12,
+    );
+    
+    ly += 25;
+    ctx.fillStyle = "#9E9E9E";
+    ctx.fillRect(lx, ly, 15, 15);
+    ctx.fillStyle = "#000000";
+    ctx.fillText(
+      `Sin registro (${sinRegistro.toFixed(1).replace(".", ",")}%)`,
+      lx + 22,
+      ly + 12,
     );
 
     const chartImgData = canvas.toDataURL("image/png");
@@ -889,6 +1008,7 @@ const Seguimientos = ({ data, userInfo }) => {
       ["Entre 50% y 89%", indicatorColorCounts.alto.toString(), "Azul claro"],
       ["Entre 30% y 49%", indicatorColorCounts.medio.toString(), "Amarillo"],
       ["Entre 0% y 29%", indicatorColorCounts.bajo.toString(), "Salmon"],
+      ["Sin registro", indicatorColorCounts.sinRegistro.toString(), "Black"],
     ];
 
     autoTable(doc, {
@@ -913,7 +1033,7 @@ const Seguimientos = ({ data, userInfo }) => {
           else if (colorName.includes("azul")) bgColor = [173, 216, 230];
           else if (colorName.includes("amarillo")) bgColor = [255, 255, 0];
           else if (colorName.includes("salmon")) bgColor = [250, 128, 114];
-
+          else if (colorName.includes("black")) bgColor = [0, 0, 0];
           if (bgColor) {
             doc.setFillColor(bgColor[0], bgColor[1], bgColor[2]);
             doc.rect(
@@ -1162,8 +1282,10 @@ const Seguimientos = ({ data, userInfo }) => {
               <TableRow>
                 <TableCell sx={{ fontWeight: 800 }}>Desafío</TableCell>
                 <TableCell sx={{ fontWeight: 800 }}>Nombre Indicador</TableCell>
+                <TableCell sx={{ fontWeight: 800 }}>Dependencia</TableCell>
                 <TableCell sx={{ fontWeight: 800 }}>Meta planeada</TableCell>
                 <TableCell sx={{ fontWeight: 800 }}>Meta ejecutada</TableCell>
+                <TableCell sx={{ fontWeight: 800 }}>Meta ejecutada %</TableCell>
               </TableRow>
               {rowsByDesafio.map((group) =>
                 group.indicators.map((indicator, index) => (
@@ -1177,19 +1299,33 @@ const Seguimientos = ({ data, userInfo }) => {
                       </TableCell>
                     )}
                     <TableCell>{toText(indicator.nombre)}</TableCell>
-                    <TableCell>{formatPercent(indicator.metaValue)}</TableCell>
+                    <TableCell>
+                      {toTextOrBlank(indicator.dependencyName)}
+                    </TableCell>
+                    <TableCell>{formatRawValue(indicator.metaValue)}</TableCell>
                     <TableCell
                       sx={{
-                        backgroundColor: percentageClass(indicator.avanceValue),
+                        backgroundColor: percentageClass(
+                          indicator.executionPercent,
+                        ),
                       }}
                     >
-                      {indicator.avanceValue}
+                      {formatRawValue(indicator.avanceValue)}
+                    </TableCell>
+                    <TableCell
+                      sx={{
+                        backgroundColor: percentageClass(
+                          indicator.executionPercent,
+                        ),
+                      }}
+                    >
+                      {indicator.executionPercent}
                     </TableCell>
                   </TableRow>
                 )),
               )}
               <TableRow>
-                <TableCell colSpan={3} sx={{ fontWeight: 800 }}>
+                <TableCell colSpan={5} sx={{ fontWeight: 800 }}>
                   Total porcentaje ejecutado
                 </TableCell>
                 <TableCell sx={{ fontWeight: 800 }}>
@@ -1197,7 +1333,7 @@ const Seguimientos = ({ data, userInfo }) => {
                 </TableCell>
               </TableRow>
               <TableRow>
-                <TableCell colSpan={3} sx={{ fontWeight: 800 }}>
+                <TableCell colSpan={5} sx={{ fontWeight: 800 }}>
                   Pendiente por ejecutar
                 </TableCell>
                 <TableCell sx={{ fontWeight: 800 }}>
@@ -1241,24 +1377,34 @@ const Seguimientos = ({ data, userInfo }) => {
                   data: [
                     {
                       id: 0,
-                      value: totals.promedio,
+                      value: totals.chartData?.ejecutado || 0,
                       label: "Ejecutado",
                       color: "green",
                     },
                     {
                       id: 1,
-                      value: totals.pending,
+                      value: totals.chartData?.pendiente || 0,
                       label: "Pendiente",
                       color: "red",
+                    },
+                    {
+                      id: 2,
+                      value: totals.chartData?.sinRegistro || 0,
+                      label: "Sin registro",
+                      color: "grey",
                     },
                   ],
                 },
               ]}
-              width={250}
-              height={250}
+              width={290}
+              height={310}
+              margin={{ bottom: 70 }}
               slotProps={{
                 legend: {
-                  padding: -10, // Aumenta este número para alejar los labels del círculo
+                  direction: "row",
+                  position: { vertical: "bottom", horizontal: "middle" },
+                  padding: 0,
+                  labelStyle: { fontSize: 12 },
                 },
               }}
             />
@@ -1308,6 +1454,16 @@ const Seguimientos = ({ data, userInfo }) => {
                     </TableCell>
                     <TableCell sx={{ backgroundColor: "salmon" }}>
                       {indicatorColorCounts.bajo}
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell
+                      sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}
+                    >
+                      Sin registro
+                    </TableCell>
+                    <TableCell sx={{ backgroundColor: "grey" }}>
+                      {indicatorColorCounts.sinRegistro}
                     </TableCell>
                   </TableRow>
                 </TableBody>

@@ -839,7 +839,8 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
     metaFields.forEach((field) => {
       const value = payload?.[field];
       if (value !== "" && value !== undefined && value !== null) {
-        metaPayload[field] = Number(value);
+        const num = Number(value);
+        metaPayload[field] = Number.isNaN(num) ? value : num;
       }
     });
 

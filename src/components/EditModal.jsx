@@ -10,6 +10,11 @@ import {
   Grid,
   MenuItem,
   TextField,
+  Radio,
+  RadioGroup,
+  FormControl,
+  FormLabel,
+  InputAdornment,
 } from "@mui/material";
 
 const emptyForm = {
@@ -57,6 +62,7 @@ const EditModal = ({
   onSubmit,
 }) => {
   const [form, setForm] = useState(emptyForm);
+  const [metaType, setMetaType] = useState("");
 
   useEffect(() => {
     if (open && indicator) {
@@ -67,6 +73,25 @@ const EditModal = ({
             String(item.id_indicador_producto || "") ===
             String(indicator.id || ""),
         );
+
+      const m25 = String(meta?.meta_2025 ?? "");
+      const m26 = String(meta?.meta_2026 ?? "");
+      const m27 = String(meta?.meta_2027 ?? "");
+      const m28 = String(meta?.meta_2028 ?? "");
+      const m29 = String(meta?.meta_2029 ?? "");
+      const m30 = String(meta?.meta_2030 ?? "");
+      
+      const hasPercentage = [m25, m26, m27, m28, m29, m30].some(m => m.includes("%"));
+      const hasNumber = [m25, m26, m27, m28, m29, m30].some(m => m !== "" && !m.includes("%"));
+
+      let initialMetaType = "";
+      if (hasPercentage) initialMetaType = "percentage";
+      else if (hasNumber) initialMetaType = "number";
+
+      setMetaType(initialMetaType);
+
+      const stripPct = (val) => val.replace("%", "").trim();
+
       setForm({
         nombre: indicator.nombre || "",
         objetivo_escuela: indicator.objetivo_escuela || "",
@@ -87,12 +112,12 @@ const EditModal = ({
           indicator.suma_facultad === true ||
           indicator.suma_facultad === 1,
         url_documento_evidencia: evidenceUrl || "",
-        meta_2025: String(meta?.meta_2025 ?? ""),
-        meta_2026: String(meta?.meta_2026 ?? ""),
-        meta_2027: String(meta?.meta_2027 ?? ""),
-        meta_2028: String(meta?.meta_2028 ?? ""),
-        meta_2029: String(meta?.meta_2029 ?? ""),
-        meta_2030: String(meta?.meta_2030 ?? ""),
+        meta_2025: stripPct(m25),
+        meta_2026: stripPct(m26),
+        meta_2027: stripPct(m27),
+        meta_2028: stripPct(m28),
+        meta_2029: stripPct(m29),
+        meta_2030: stripPct(m30),
       });
     }
   }, [open, indicator, evidenceUrl, metas]);
@@ -123,7 +148,22 @@ const EditModal = ({
     });
   };
 
-  const submit = () => onSubmit(form);
+  const submit = () => {
+    const formatMeta = (val) => {
+      if (val === "") return val;
+      return metaType === "percentage" ? `${val}%` : val;
+    };
+    
+    onSubmit({
+      ...form,
+      meta_2025: formatMeta(form.meta_2025),
+      meta_2026: formatMeta(form.meta_2026),
+      meta_2027: formatMeta(form.meta_2027),
+      meta_2028: formatMeta(form.meta_2028),
+      meta_2029: formatMeta(form.meta_2029),
+      meta_2030: formatMeta(form.meta_2030),
+    });
+  };
 
   const handleMetaChange = (field) => (event) => {
     const nextValue = event.target.value;
@@ -369,64 +409,95 @@ const EditModal = ({
                   label="Suma facultad"
                 />
               </Grid>
+              <Grid item xs={12} md={12}>
+                <FormControl component="fieldset" sx={{ mt: 1 }}>
+                  <FormLabel component="legend">Tipo de metas</FormLabel>
+                  <RadioGroup
+                    row
+                    value={metaType}
+                    onChange={(e) => setMetaType(e.target.value)}
+                  >
+                    <FormControlLabel value="number" control={<Radio />} label="Número" />
+                    <FormControlLabel value="percentage" control={<Radio />} label="Porcentaje" />
+                  </RadioGroup>
+                </FormControl>
+              </Grid>
               <Grid item xs={12} md={2}>
                 <TextField
                   fullWidth
-                  label="Meta 2025"
-                  type="number"
-                  inputProps={{ step: "any" }}
-                  value={form.meta_2025}
+                label="Meta 2025"
+                type="text"
+                InputProps={{
+                  endAdornment: metaType === "percentage" ? <InputAdornment position="end">%</InputAdornment> : null,
+                }}
+                value={form.meta_2025}
                   onChange={handleMetaChange("meta_2025")}
+                  disabled={!metaType}
                 />
               </Grid>
               <Grid item xs={12} md={2}>
                 <TextField
                   fullWidth
-                  label="Meta 2026"
-                  type="number"
-                  inputProps={{ step: "any" }}
-                  value={form.meta_2026}
+                label="Meta 2026"
+                type="text"
+                InputProps={{
+                  endAdornment: metaType === "percentage" ? <InputAdornment position="end">%</InputAdornment> : null,
+                }}
+                value={form.meta_2026}
                   onChange={handleMetaChange("meta_2026")}
+                  disabled={!metaType}
                 />
               </Grid>
               <Grid item xs={12} md={2}>
                 <TextField
                   fullWidth
-                  label="Meta 2027"
-                  type="number"
-                  inputProps={{ step: "any" }}
-                  value={form.meta_2027}
+                label="Meta 2027"
+                type="text"
+                InputProps={{
+                  endAdornment: metaType === "percentage" ? <InputAdornment position="end">%</InputAdornment> : null,
+                }}
+                value={form.meta_2027}
                   onChange={handleMetaChange("meta_2027")}
+                  disabled={!metaType}
                 />
               </Grid>
               <Grid item xs={12} md={2}>
                 <TextField
                   fullWidth
-                  label="Meta 2028"
-                  type="number"
-                  inputProps={{ step: "any" }}
-                  value={form.meta_2028}
+                label="Meta 2028"
+                type="text"
+                InputProps={{
+                  endAdornment: metaType === "percentage" ? <InputAdornment position="end">%</InputAdornment> : null,
+                }}
+                value={form.meta_2028}
                   onChange={handleMetaChange("meta_2028")}
+                  disabled={!metaType}
                 />
               </Grid>
               <Grid item xs={12} md={2}>
                 <TextField
                   fullWidth
-                  label="Meta 2029"
-                  type="number"
-                  inputProps={{ step: "any" }}
-                  value={form.meta_2029}
+                label="Meta 2029"
+                type="text"
+                InputProps={{
+                  endAdornment: metaType === "percentage" ? <InputAdornment position="end">%</InputAdornment> : null,
+                }}
+                value={form.meta_2029}
                   onChange={handleMetaChange("meta_2029")}
+                  disabled={!metaType}
                 />
               </Grid>
               <Grid item xs={12} md={2}>
                 <TextField
                   fullWidth
-                  label="Meta 2030"
-                  type="number"
-                  inputProps={{ step: "any" }}
-                  value={form.meta_2030}
+                label="Meta 2030"
+                type="text"
+                InputProps={{
+                  endAdornment: metaType === "percentage" ? <InputAdornment position="end">%</InputAdornment> : null,
+                }}
+                value={form.meta_2030}
                   onChange={handleMetaChange("meta_2030")}
+                  disabled={!metaType}
                 />
               </Grid>
               <Grid item xs={12}>
