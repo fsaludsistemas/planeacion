@@ -207,6 +207,9 @@ const Seguimientos = ({ data, userInfo }) => {
     () => new Map(desafios.map((item) => [String(item.id), item])),
     [desafios],
   );
+  const convergenteById = useMemo(() => new Map(estrategiasConvergentes.map((item) => [String(item.id), item])),
+    [estrategiasConvergentes],
+  );
   const respondeAById = useMemo(
     () => new Map(respondeAs.map((item) => [String(item.id), item])),
     [respondeAs],
@@ -320,6 +323,7 @@ const Seguimientos = ({ data, userInfo }) => {
       const dependency = tipoDependenciaById.get(
         String(indicator.id_dependencia || ""),
       );
+      const convergente = convergenteById.get(String(indicator.id_estrategia_convergente || ""));
       if (!desafio) return;
       const meta = metaByIndicatorId.get(String(indicator.id));
       const avance = avanceByIndicatorId.get(String(indicator.id));
@@ -349,17 +353,22 @@ const Seguimientos = ({ data, userInfo }) => {
         existingInd.avanceValue = sumAvance;
         existingInd.executionPercent = formatExecutionPercent(sumMeta, sumAvance);
 
-        if (dependency?.nombre && existingInd.dependencyName !== dependency.nombre) {
-          if (!existingInd.dependencyName) {
-            existingInd.dependencyName = dependency.nombre;
-          } else if (!existingInd.dependencyName.includes(dependency.nombre)) {
-            existingInd.dependencyName += `, ${dependency.nombre}`;
-          }
+        if (dependency?.nombre) {
+          const depName = dependency.nombre;
+          existingInd.dependencyCounts.set(
+            depName,
+            (existingInd.dependencyCounts.get(depName) || 0) + 1
+          );
         }
       } else {
+        const depCounts = new Map();
+        if (dependency?.nombre) {
+          depCounts.set(dependency.nombre, 1);
+        }
         existing.indicators.push({
           ...indicator,
-          dependencyName: dependency?.nombre,
+          dependencyCounts: depCounts,
+          convergenteName: convergente?.titulo,
           metaValue,
           avanceValue,
           executionPercent: formatExecutionPercent(metaValue, avanceValue),
@@ -373,6 +382,7 @@ const Seguimientos = ({ data, userInfo }) => {
     filterableIndicators,
     desafioById,
     tipoDependenciaById,
+    convergenteById,
     metaByIndicatorId,
     avanceByIndicatorId,
     selectedYear,
@@ -731,6 +741,7 @@ const Seguimientos = ({ data, userInfo }) => {
         tableData.push([
           index === 0 ? toText(group.desafio.titulo) : "",
           toText(indicator.nombre),
+          toTextOrBlank(indicator.convergenteName),
           toTextOrBlank(indicator.dependencyName),
           formatRawValue(indicator.metaValue),
           formatRawValue(indicator.avanceValue),
@@ -1275,102 +1286,43 @@ const Seguimientos = ({ data, userInfo }) => {
         )}
       </Paper>
 
-      <Box className="seguimientos-layout">
-        <TableContainer component={Paper} className="seguimientos-table-card">
-          <Table size="small">
-            <TableBody>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 800 }}>Desafío</TableCell>
-                <TableCell sx={{ fontWeight: 800 }}>Nombre Indicador</TableCell>
-                <TableCell sx={{ fontWeight: 800 }}>Dependencia</TableCell>
-                <TableCell sx={{ fontWeight: 800 }}>Meta planeada</TableCell>
-                <TableCell sx={{ fontWeight: 800 }}>Meta ejecutada</TableCell>
-                <TableCell sx={{ fontWeight: 800 }}>Meta ejecutada %</TableCell>
-              </TableRow>
-              {rowsByDesafio.map((group) =>
-                group.indicators.map((indicator, index) => (
-                  <TableRow key={`${group.desafio.id}-${indicator.id}`}>
-                    {index === 0 && (
-                      <TableCell
-                        rowSpan={group.indicators.length}
-                        sx={{ fontWeight: 700 }}
-                      >
-                        {toText(group.desafio.titulo)}
-                      </TableCell>
-                    )}
-                    <TableCell>{toText(indicator.nombre)}</TableCell>
-                    <TableCell>
-                      {toTextOrBlank(indicator.dependencyName)}
-                    </TableCell>
-                    <TableCell>{formatRawValue(indicator.metaValue)}</TableCell>
-                    <TableCell
-                      sx={{
-                        backgroundColor: percentageClass(
-                          indicator.executionPercent,
-                        ),
-                      }}
-                    >
-                      {formatRawValue(indicator.avanceValue)}
-                    </TableCell>
-                    <TableCell
-                      sx={{
-                        backgroundColor: percentageClass(
-                          indicator.executionPercent,
-                        ),
-                      }}
-                    >
-                      {indicator.executionPercent}
-                    </TableCell>
+      {/* Resumen horizontal - antes de la tabla */}
+      <Paper className="seguimientos-summary-horizontal" elevation={1}>
+        <Box className="seguimientos-summary-inner">
+          {/* Tabla de resumen */}
+          <Box className="seguimientos-summary-section">
+            <Typography variant="h6" sx={{ fontWeight: 800, mb: 1 }}>
+              Resumen
+            </Typography>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 800 }}>Concepto</TableCell>
+                    <TableCell sx={{ fontWeight: 800 }}>Cantidad</TableCell>
                   </TableRow>
-                )),
-              )}
-              <TableRow>
-                <TableCell colSpan={5} sx={{ fontWeight: 800 }}>
-                  Total porcentaje ejecutado
-                </TableCell>
-                <TableCell sx={{ fontWeight: 800 }}>
-                  {`${totals.promedio.toFixed(1).replace(".", ",")}%`}
-                </TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell colSpan={5} sx={{ fontWeight: 800 }}>
-                  Pendiente por ejecutar
-                </TableCell>
-                <TableCell sx={{ fontWeight: 800 }}>
-                  {`${totals.pending.toFixed(1).replace(".", ",")}%`}
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </TableContainer>
+                </TableHead>
+                <TableBody>
+                  <TableRow>
+                    <TableCell>Total indicadores</TableCell>
+                    <TableCell>{filterableIndicators.length}</TableCell>
+                  </TableRow>
+                  {challengeCounts.map((item) => (
+                    <TableRow key={item.desafio.id}>
+                      <TableCell>{toText(item.desafio.titulo)}</TableCell>
+                      <TableCell>{item.count}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
 
-        <Paper className="seguimientos-summary" elevation={1}>
-          <Typography variant="h6" sx={{ fontWeight: 800, mb: 1 }}>
-            Resumen
-          </Typography>
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 800 }}>Concepto</TableCell>
-                  <TableCell sx={{ fontWeight: 800 }}>Cantidad</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                <TableRow>
-                  <TableCell>Total indicadores</TableCell>
-                  <TableCell>{filterableIndicators.length}</TableCell>
-                </TableRow>
-                {challengeCounts.map((item) => (
-                  <TableRow key={item.desafio.id}>
-                    <TableCell>{toText(item.desafio.titulo)}</TableCell>
-                    <TableCell>{item.count}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          <Box className="seguimientos-chart">
+          {/* Gráfico de torta */}
+          <Box className="seguimientos-summary-section seguimientos-summary-chart">
+            <Typography variant="h6" sx={{ fontWeight: 800, mb: 1 }}>
+              Cumplimiento General
+            </Typography>
             <PieChart
               series={[
                 {
@@ -1397,29 +1349,29 @@ const Seguimientos = ({ data, userInfo }) => {
                 },
               ]}
               width={290}
-              height={310}
-              margin={{ bottom: 70 }}
+              height={220}
+              margin={{ bottom: 60 }}
               slotProps={{
                 legend: {
                   direction: "row",
                   position: { vertical: "bottom", horizontal: "middle" },
                   padding: 0,
-                  labelStyle: { fontSize: 12 },
+                  labelStyle: { fontSize: 11 },
                 },
               }}
             />
           </Box>
-          <Box sx={{ mt: 2 }}>
+
+          {/* Contador de colores */}
+          <Box className="seguimientos-summary-section">
             <Typography variant="h6" sx={{ fontWeight: 800, mb: 1 }}>
-              Contador de indicadores y significado de colores
+              Indicadores por color
             </Typography>
             <TableContainer>
               <Table size="small">
                 <TableBody>
                   <TableRow>
-                    <TableCell
-                      sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}
-                    >
+                    <TableCell sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}>
                       Mayores de 90%
                     </TableCell>
                     <TableCell sx={{ backgroundColor: "lightgreen" }}>
@@ -1427,9 +1379,7 @@ const Seguimientos = ({ data, userInfo }) => {
                     </TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell
-                      sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}
-                    >
+                    <TableCell sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}>
                       Entre 50% y 89%
                     </TableCell>
                     <TableCell sx={{ backgroundColor: "lightblue" }}>
@@ -1437,9 +1387,7 @@ const Seguimientos = ({ data, userInfo }) => {
                     </TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell
-                      sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}
-                    >
+                    <TableCell sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}>
                       Entre 30% y 49%
                     </TableCell>
                     <TableCell sx={{ backgroundColor: "yellow" }}>
@@ -1447,9 +1395,7 @@ const Seguimientos = ({ data, userInfo }) => {
                     </TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell
-                      sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}
-                    >
+                    <TableCell sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}>
                       Entre 0% y 29%
                     </TableCell>
                     <TableCell sx={{ backgroundColor: "salmon" }}>
@@ -1457,9 +1403,7 @@ const Seguimientos = ({ data, userInfo }) => {
                     </TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell
-                      sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}
-                    >
+                    <TableCell sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}>
                       Sin registro
                     </TableCell>
                     <TableCell sx={{ backgroundColor: "grey" }}>
@@ -1470,8 +1414,87 @@ const Seguimientos = ({ data, userInfo }) => {
               </Table>
             </TableContainer>
           </Box>
-        </Paper>
-      </Box>
+        </Box>
+      </Paper>
+
+      {/* Tabla de indicadores - ahora ocupa todo el ancho */}
+      <TableContainer component={Paper} className="seguimientos-table-card">
+        <Table size="small">
+          <TableBody>
+            <TableRow>
+              <TableCell sx={{ fontWeight: 800 }}>Desafío</TableCell>
+              <TableCell sx={{ fontWeight: 800 }}>Nombre Indicador</TableCell>
+              <TableCell sx={{ fontWeight: 800 }}>Estrategia Convergente</TableCell>
+              <TableCell sx={{ fontWeight: 800 }}>Dependencia</TableCell>
+              <TableCell sx={{ fontWeight: 800 }}>Meta planeada</TableCell>
+              <TableCell sx={{ fontWeight: 800 }}>Meta ejecutada</TableCell>
+              <TableCell sx={{ fontWeight: 800 }}>Meta ejecutada %</TableCell>
+            </TableRow>
+            {rowsByDesafio.map((group) =>
+              group.indicators.map((indicator, index) => (
+                <TableRow key={`${group.desafio.id}-${indicator.id}`}>
+                  {index === 0 && (
+                    <TableCell
+                      rowSpan={group.indicators.length}
+                      sx={{ fontWeight: 700 }}
+                    >
+                      {toText(group.desafio.titulo)}
+                    </TableCell>
+                  )}
+                  <TableCell>{toText(indicator.nombre)}</TableCell>
+                  <TableCell>
+                    {toTextOrBlank(indicator.convergenteName)}
+                  </TableCell>
+                  <TableCell>
+                    {(() => {
+                      const counts = indicator.dependencyCounts;
+                      if (!counts || counts.size === 0) return "";
+                      return [...counts.entries()]
+                        .map(([name, count]) => `${name} (${count})`)
+                        .join(", ");
+                    })()}
+                  </TableCell>
+                  <TableCell>{formatRawValue(indicator.metaValue)}</TableCell>
+                  <TableCell
+                    sx={{
+                      backgroundColor: percentageClass(
+                        indicator.executionPercent,
+                      ),
+                    }}
+                  >
+                    {formatRawValue(indicator.avanceValue)}
+                  </TableCell>
+                  <TableCell
+                    sx={{
+                      backgroundColor: percentageClass(
+                        indicator.executionPercent,
+                      ),
+                    }}
+                  >
+                    {indicator.executionPercent}
+                  </TableCell>
+                </TableRow>
+              )),
+            )}
+            <TableRow>
+              <TableCell colSpan={5} sx={{ fontWeight: 800 }}>
+                Total porcentaje ejecutado
+              </TableCell>
+              <TableCell sx={{ fontWeight: 800 }}>
+                {`${totals.promedio.toFixed(1).replace(".", ",")}%`}
+              </TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell colSpan={5} sx={{ fontWeight: 800 }}>
+                Pendiente por ejecutar
+              </TableCell>
+              <TableCell sx={{ fontWeight: 800 }}>
+                {`${totals.pending.toFixed(1).replace(".", ",")}%`}
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </TableContainer>
 
       {!rowsByDesafio.length && (
         <Paper className="seguimientos-empty" elevation={0}>
