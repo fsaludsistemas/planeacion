@@ -571,6 +571,7 @@ const Seguimientos = ({ data, userInfo }) => {
   const totals = useMemo(() => {
     let totalIndicadoresValidos = 0;
     let totalIndicadoresGeneral = 0;
+    let totalEjecutados = 0;
 
     const executed = rowsByDesafio.reduce((sum, group) => {
       totalIndicadoresGeneral += group.indicators.length;
@@ -580,6 +581,7 @@ const Seguimientos = ({ data, userInfo }) => {
           const numero = parseSheetNumber(indicator.executionPercent);
           if (typeof numero !== "number") return inner;
           totalIndicadoresValidos++;
+          if (numero >= 90) totalEjecutados++;
           return inner + numero;
         }, 0)
       );
@@ -595,6 +597,9 @@ const Seguimientos = ({ data, userInfo }) => {
     return {
       promedio,
       pending: pendingPorcentaje,
+      numEjecutados: totalEjecutados,
+      totalIndicadores: totalIndicadoresGeneral,
+      porcentajeCumplimiento: totalIndicadoresGeneral ? (totalEjecutados / totalIndicadoresGeneral) * 100 : 0,
       chartData: {
         ejecutado: promedio * pesoValidos,
         pendiente: pendingPorcentaje * pesoValidos,
@@ -603,14 +608,18 @@ const Seguimientos = ({ data, userInfo }) => {
     };
   }, [rowsByDesafio]);
 
-  const challengeCounts = useMemo(
-    () =>
-      rowsByDesafio.map((group) => ({
-        desafio: group.desafio,
-        count: group.indicators.length,
-      })),
-    [rowsByDesafio],
-  );
+  // challengeCounts: si hay filtro de dependencia se cuentan todos los indicadores del grupo,
+  // si no hay filtro se cuentan solo los indicadores únicos (por nombre normalizado).
+  // Los desafíos se ordenan por id numérico.
+  const challengeCounts = useMemo(() => {
+    const sorted = [...rowsByDesafio].sort(
+      (a, b) => Number(a.desafio.id ?? 0) - Number(b.desafio.id ?? 0)
+    );
+    return sorted.map((group) => ({
+      desafio: group.desafio,
+      count: group.indicators.length,
+    }));
+  }, [rowsByDesafio]);
 
   const indicatorColorCounts = useMemo(() => {
     return filterableIndicators.reduce(
@@ -779,7 +788,7 @@ const Seguimientos = ({ data, userInfo }) => {
           "Dependencia",
           "Meta Planeada",
           "Meta Ejecutada",
-          "Meta Ejecutada %",
+          "Porcentaje ejecutado",
         ],
       ],
       body: tableData,
@@ -1290,7 +1299,7 @@ const Seguimientos = ({ data, userInfo }) => {
       <Paper className="seguimientos-summary-horizontal" elevation={1}>
         <Box className="seguimientos-summary-inner">
           {/* Tabla de resumen */}
-          <Box className="seguimientos-summary-section">
+          <Box className="seguimientos-summary-section seguimientos-summary-resumen">
             <Typography variant="h6" sx={{ fontWeight: 800, mb: 1 }}>
               Resumen
             </Typography>
@@ -1304,8 +1313,8 @@ const Seguimientos = ({ data, userInfo }) => {
                 </TableHead>
                 <TableBody>
                   <TableRow>
-                    <TableCell>Total indicadores</TableCell>
-                    <TableCell>{filterableIndicators.length}</TableCell>
+                    <TableCell sx={{ fontWeight: 800 }}>Total indicadores</TableCell>
+                    <TableCell sx={{ fontWeight: 800 }}>{filterableIndicators.length}</TableCell>
                   </TableRow>
                   {challengeCounts.map((item) => (
                     <TableRow key={item.desafio.id}>
@@ -1318,164 +1327,207 @@ const Seguimientos = ({ data, userInfo }) => {
             </TableContainer>
           </Box>
 
-          {/* Gráfico de torta */}
-          <Box className="seguimientos-summary-section seguimientos-summary-chart">
-            <Typography variant="h6" sx={{ fontWeight: 800, mb: 1 }}>
-              Cumplimiento General
-            </Typography>
-            <PieChart
-              series={[
-                {
-                  data: [
+          <Box className="seguimientos-summary-right">
+            <Box className="seguimientos-summary-charts-row">
+              {/* Gráfico de torta */}
+              <Box className="seguimientos-summary-section seguimientos-summary-chart">
+                <Typography variant="h6" sx={{ fontWeight: 800, mb: 1 }}>
+                  Cumplimiento General
+                </Typography>
+                <PieChart
+                  series={[
                     {
-                      id: 0,
-                      value: totals.chartData?.ejecutado || 0,
-                      label: "Ejecutado",
-                      color: "green",
+                      data: [
+                        {
+                          id: 0,
+                          value: totals.chartData?.ejecutado || 0,
+                          label: "Ejecutado",
+                          color: "green",
+                        },
+                        {
+                          id: 1,
+                          value: totals.chartData?.pendiente || 0,
+                          label: "Pendiente",
+                          color: "red",
+                        },
+                        {
+                          id: 2,
+                          value: totals.chartData?.sinRegistro || 0,
+                          label: "Sin registro",
+                          color: "grey",
+                        },
+                      ],
                     },
-                    {
-                      id: 1,
-                      value: totals.chartData?.pendiente || 0,
-                      label: "Pendiente",
-                      color: "red",
+                  ]}
+                  width={290}
+                  height={220}
+                  margin={{ bottom: 60 }}
+                  slotProps={{
+                    legend: {
+                      direction: "row",
+                      position: { vertical: "bottom", horizontal: "middle" },
+                      padding: 0,
+                      labelStyle: { fontSize: 11 },
                     },
-                    {
-                      id: 2,
-                      value: totals.chartData?.sinRegistro || 0,
-                      label: "Sin registro",
-                      color: "grey",
-                    },
-                  ],
-                },
-              ]}
-              width={290}
-              height={220}
-              margin={{ bottom: 60 }}
-              slotProps={{
-                legend: {
-                  direction: "row",
-                  position: { vertical: "bottom", horizontal: "middle" },
-                  padding: 0,
-                  labelStyle: { fontSize: 11 },
-                },
-              }}
-            />
-          </Box>
+                  }}
+                />
+              </Box>
 
-          {/* Contador de colores */}
-          <Box className="seguimientos-summary-section">
-            <Typography variant="h6" sx={{ fontWeight: 800, mb: 1 }}>
-              Indicadores por color
-            </Typography>
-            <TableContainer>
-              <Table size="small">
-                <TableBody>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}>
-                      Mayores de 90%
-                    </TableCell>
-                    <TableCell sx={{ backgroundColor: "lightgreen" }}>
-                      {indicatorColorCounts.superior}
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}>
-                      Entre 50% y 89%
-                    </TableCell>
-                    <TableCell sx={{ backgroundColor: "lightblue" }}>
-                      {indicatorColorCounts.alto}
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}>
-                      Entre 30% y 49%
-                    </TableCell>
-                    <TableCell sx={{ backgroundColor: "yellow" }}>
-                      {indicatorColorCounts.medio}
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}>
-                      Entre 0% y 29%
-                    </TableCell>
-                    <TableCell sx={{ backgroundColor: "salmon" }}>
-                      {indicatorColorCounts.bajo}
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}>
-                      Sin registro
-                    </TableCell>
-                    <TableCell sx={{ backgroundColor: "grey" }}>
-                      {indicatorColorCounts.sinRegistro}
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </TableContainer>
+              {/* Contador de colores */}
+              <Box className="seguimientos-summary-section">
+                <Typography variant="h6" sx={{ fontWeight: 800, mb: 1 }}>
+                  Indicadores por color
+                </Typography>
+                <TableContainer>
+                  <Table size="small">
+                    <TableBody>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}>
+                          Mayores de 90%
+                        </TableCell>
+                        <TableCell sx={{ backgroundColor: "lightgreen" }}>
+                          {indicatorColorCounts.superior}
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}>
+                          Entre 50% y 89%
+                        </TableCell>
+                        <TableCell sx={{ backgroundColor: "lightblue" }}>
+                          {indicatorColorCounts.alto}
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}>
+                          Entre 30% y 49%
+                        </TableCell>
+                        <TableCell sx={{ backgroundColor: "yellow" }}>
+                          {indicatorColorCounts.medio}
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}>
+                          Entre 0% y 29%
+                        </TableCell>
+                        <TableCell sx={{ backgroundColor: "salmon" }}>
+                          {indicatorColorCounts.bajo}
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}>
+                          Sin registro
+                        </TableCell>
+                        <TableCell sx={{ backgroundColor: "grey" }}>
+                          {indicatorColorCounts.sinRegistro}
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+            </Box>
+
+            <Box className="seguimientos-stats-cards">
+              <Paper className="seguimientos-stat-card" elevation={0}>
+                <Typography className="seguimientos-stat-label">
+                  Indicadores ejecutados
+                </Typography>
+                <Typography className="seguimientos-stat-value">
+                  {totals.numEjecutados}
+                </Typography>
+              </Paper>
+              <Paper className="seguimientos-stat-card" elevation={0}>
+                <Typography className="seguimientos-stat-label">
+                  Porcentaje de cumplimiento
+                </Typography>
+                <Typography className="seguimientos-stat-value">
+                  {totals.porcentajeCumplimiento.toFixed(1).replace(".", ",")}%
+                </Typography>
+              </Paper>
+            </Box>
           </Box>
         </Box>
       </Paper>
 
-      {/* Tabla de indicadores - ahora ocupa todo el ancho */}
+      {/* Tabla de indicadores agrupada por desafío y estrategia convergente */}
       <TableContainer component={Paper} className="seguimientos-table-card">
         <Table size="small">
           <TableBody>
             <TableRow>
               <TableCell sx={{ fontWeight: 800 }}>Desafío</TableCell>
-              <TableCell sx={{ fontWeight: 800 }}>Nombre Indicador</TableCell>
               <TableCell sx={{ fontWeight: 800 }}>Estrategia Convergente</TableCell>
+              <TableCell sx={{ fontWeight: 800 }}>Nombre Indicador</TableCell>
               <TableCell sx={{ fontWeight: 800 }}>Dependencia</TableCell>
               <TableCell sx={{ fontWeight: 800 }}>Meta planeada</TableCell>
               <TableCell sx={{ fontWeight: 800 }}>Meta ejecutada</TableCell>
-              <TableCell sx={{ fontWeight: 800 }}>Meta ejecutada %</TableCell>
+              <TableCell sx={{ fontWeight: 800 }}>Porcentaje ejecutado</TableCell>
             </TableRow>
-            {rowsByDesafio.map((group) =>
-              group.indicators.map((indicator, index) => (
-                <TableRow key={`${group.desafio.id}-${indicator.id}`}>
-                  {index === 0 && (
-                    <TableCell
-                      rowSpan={group.indicators.length}
-                      sx={{ fontWeight: 700 }}
-                    >
-                      {toText(group.desafio.titulo)}
+            {rowsByDesafio.map((group) => {
+              // Agrupar los indicadores del desafío por estrategia convergente
+              const convergenteGroups = [];
+              const convergenteMap = new Map();
+              group.indicators.forEach((indicator) => {
+                const key = toTextOrBlank(indicator.convergenteName) || "(Sin estrategia convergente)";
+                if (!convergenteMap.has(key)) {
+                  convergenteMap.set(key, []);
+                  convergenteGroups.push(key);
+                }
+                convergenteMap.get(key).push(indicator);
+              });
+
+              const totalIndicatorsInDesafio = group.indicators.length;
+
+              return convergenteGroups.map((convKey, convIndex) => {
+                const convIndicators = convergenteMap.get(convKey);
+                return convIndicators.map((indicator, indIndex) => (
+                  <TableRow key={`${group.desafio.id}-${convKey}-${indicator.id}`}>
+                    {/* Celda de desafío: rowSpan total de todos los indicadores del desafío, solo en la primera fila */}
+                    {convIndex === 0 && indIndex === 0 && (
+                      <TableCell
+                        rowSpan={totalIndicatorsInDesafio}
+                        sx={{ fontWeight: 700}}
+                      >
+                        {toText(group.desafio.titulo)}
+                      </TableCell>
+                    )}
+                    {/* Celda de estrategia convergente: rowSpan de los indicadores de ese convergente */}
+                    {indIndex === 0 && (
+                      <TableCell
+                        rowSpan={convIndicators.length}
+                        sx={{ fontWeight: 600, fontStyle: convKey === "(Sin estrategia convergente)" ? "italic" : "normal" }}
+                      >
+                        {convKey}
+                      </TableCell>
+                    )}
+                    <TableCell>{toText(indicator.nombre)}</TableCell>
+                    <TableCell>
+                      {(() => {
+                        const counts = indicator.dependencyCounts;
+                        if (!counts || counts.size === 0) return "";
+                        return [...counts.entries()]
+                          .map(([name, count]) => `${name} (${count})`)
+                          .join(", ");
+                      })()}
                     </TableCell>
-                  )}
-                  <TableCell>{toText(indicator.nombre)}</TableCell>
-                  <TableCell>
-                    {toTextOrBlank(indicator.convergenteName)}
-                  </TableCell>
-                  <TableCell>
-                    {(() => {
-                      const counts = indicator.dependencyCounts;
-                      if (!counts || counts.size === 0) return "";
-                      return [...counts.entries()]
-                        .map(([name, count]) => `${name} (${count})`)
-                        .join(", ");
-                    })()}
-                  </TableCell>
-                  <TableCell>{formatRawValue(indicator.metaValue)}</TableCell>
-                  <TableCell
-                    sx={{
-                      backgroundColor: percentageClass(
-                        indicator.executionPercent,
-                      ),
-                    }}
-                  >
-                    {formatRawValue(indicator.avanceValue)}
-                  </TableCell>
-                  <TableCell
-                    sx={{
-                      backgroundColor: percentageClass(
-                        indicator.executionPercent,
-                      ),
-                    }}
-                  >
-                    {indicator.executionPercent}
-                  </TableCell>
-                </TableRow>
-              )),
-            )}
+                    <TableCell>{formatRawValue(indicator.metaValue)}</TableCell>
+                    <TableCell
+                      sx={{
+                        backgroundColor: percentageClass(indicator.executionPercent),
+                      }}
+                    >
+                      {formatRawValue(indicator.avanceValue)}
+                    </TableCell>
+                    <TableCell
+                      sx={{
+                        backgroundColor: percentageClass(indicator.executionPercent),
+                      }}
+                    >
+                      {indicator.executionPercent}
+                    </TableCell>
+                  </TableRow>
+                ));
+              });
+            })}
             <TableRow>
               <TableCell colSpan={5} sx={{ fontWeight: 800 }}>
                 Total porcentaje ejecutado

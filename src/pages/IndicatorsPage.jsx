@@ -1226,7 +1226,7 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
         </Box>
       </Paper>
 
-      <Paper className="indicator-list-header" elevation={1}>
+      <Paper className="indicator-list-header" elevation={2}>
         <Typography className="summary-title" sx={{ fontWeight: 700 }}>
           ID
         </Typography>
@@ -1244,6 +1244,12 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
           sx={{ fontWeight: 700 }}
         >
           Avance
+        </Typography>
+        <Typography
+          className="summary-title indicator-summary-dependency"
+          sx={{ fontWeight: 700 }}
+        >
+          Meta
         </Typography>
       </Paper>
 
@@ -1294,6 +1300,12 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
                     indicator.avance?.avance_2026,
                     indicator.meta?.meta_2026,
                   )}
+                </Typography>
+                <Typography
+                  sx={{ fontWeight: 700 }}
+                  className="indicator-summary-dependency"
+                >
+                  {indicator.meta?.meta_2026}
                 </Typography>
               </Box>
             </AccordionSummary>
