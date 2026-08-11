@@ -17,6 +17,7 @@ import {
   ToggleButtonGroup,
 } from "@mui/material";
 import { BarChart } from "@mui/x-charts/BarChart";
+import { Chart } from "react-google-charts";
 
 // Helper functions (copied from Seguimientos logic)
 const toText = (value) => String(value ?? "").trim() || "No disponible";
@@ -72,6 +73,7 @@ function Consolidados({ data, userInfo }) {
   const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
   const [viewType, setViewType] = useState("desafios");
   const [selectedSchool, setSelectedSchool] = useState("all");
+  const [selectedOficina, setSelectedOficina] = useState("all");
 
   const desafios = useMemo(() => sortById(getSheet(data, "DESAFIOS")), [data]);
   const indicators = useMemo(() => sortById(getSheet(data, "INDICADORES_PRODUCTO")), [data]);
@@ -152,6 +154,7 @@ function Consolidados({ data, userInfo }) {
       return {
         id_desafio: group.desafio.id,
         desafioNombre: group.desafio.titulo || `Desafío ${group.desafio.id}`,
+        numIndicadores: group.indicators.length,
         metaPlaneada: sumPlanned,
         metaEjecutada: sumExecuted,
         metaEjecutadaStr: execPercentStr,
@@ -192,7 +195,10 @@ function Consolidados({ data, userInfo }) {
         id_dependencia: idDependencia,
         dependencia,
         indicators: [],
+        rawCount: 0,
       };
+
+      existing.rawCount += 1;
 
       const normalizedName = normalize(indicator.nombre);
       const existingInd = existing.indicators.find((i) => normalize(i.nombre) === normalizedName);
@@ -232,7 +238,9 @@ function Consolidados({ data, userInfo }) {
         id_dependencia: group.id_dependencia,
         desafioNombre: `Desafío ${group.id_desafio}`,
         escuelaNombre: group.dependencia.nombre || `Escuela ${group.id_dependencia}`,
+        numIndicadores: group.rawCount,
         metaPlaneada: sumPlanned,
+        metaEjecutada: sumExecuted,
         metaEjecutadaStr: execPercentStr,
         metaEjecutadaNum: execPercentNum,
         pendienteStr: pendingPercent > 0 ? `${pendingPercent.toFixed(1).replace(".", ",")}%` : "0%",
@@ -257,8 +265,8 @@ function Consolidados({ data, userInfo }) {
     return [...rowsMap.values()].sort((a, b) => Number(a.id_desafio) - Number(b.id_desafio));
   }, [indicators, desafioById, dependenciaById, metaByIndicatorId, avanceByIndicatorId, selectedYear]);
 
-  // Extract active schools to show in the table/chart
-  const activeSchools = useMemo(() => {
+  // Extract active dependencias
+  const allActiveDependencias = useMemo(() => {
     const ids = new Set();
     statsByEscuela.forEach(row => {
       Object.keys(row.schools).forEach(schoolId => ids.add(schoolId));
@@ -269,10 +277,23 @@ function Consolidados({ data, userInfo }) {
       .sort((a, b) => a.nombre?.localeCompare(b.nombre));
   }, [statsByEscuela, dependencias]);
 
-  const displayedSchools = useMemo(() => {
-    if (selectedSchool === "all") return activeSchools;
-    return activeSchools.filter(school => String(school.id) === selectedSchool);
-  }, [activeSchools, selectedSchool]);
+  const activeSchools = useMemo(() => {
+    return allActiveDependencias.filter(dep => String(dep.tipo || "").trim().toLowerCase() !== "oficina");
+  }, [allActiveDependencias]);
+
+  const activeOficinas = useMemo(() => {
+    return allActiveDependencias.filter(dep => String(dep.tipo || "").trim().toLowerCase() === "oficina");
+  }, [allActiveDependencias]);
+
+  const activeItems = viewType === "oficinas" ? activeOficinas : activeSchools;
+  const selectedItem = viewType === "oficinas" ? selectedOficina : selectedSchool;
+  const setSelectedItem = viewType === "oficinas" ? setSelectedOficina : setSelectedSchool;
+  const titleLabel = viewType === "oficinas" ? "Oficina" : "Escuela";
+
+  const displayedItems = useMemo(() => {
+    if (selectedItem === "all") return activeItems;
+    return activeItems.filter(item => String(item.id) === selectedItem);
+  }, [activeItems, selectedItem]);
 
   // Chart dataset for View 1
   const chartDataDesafios = useMemo(() => {
@@ -282,26 +303,108 @@ function Consolidados({ data, userInfo }) {
     }));
   }, [statsByDesafio]);
 
-  // Chart dataset for View 2
-  const chartDataEscuelas = useMemo(() => {
+  // Chart dataset for View 2 & 3
+  const chartDataItems = useMemo(() => {
     return statsByEscuela.map((row) => {
       const dataPoint = {
         desafio: row.desafioNombre,
       };
-      displayedSchools.forEach(school => {
-        const schoolData = row.schools[String(school.id)];
-        dataPoint[`school_${school.id}`] = schoolData ? schoolData.metaEjecutadaNum : 0;
+      displayedItems.forEach(item => {
+        const itemData = row.schools[String(item.id)];
+        dataPoint[`item_${item.id}`] = itemData ? itemData.metaEjecutadaNum : 0;
       });
       return dataPoint;
     });
-  }, [statsByEscuela, displayedSchools]);
+  }, [statsByEscuela, displayedItems]);
 
-  const seriesEscuelas = useMemo(() => {
-    return displayedSchools.map(school => ({
-      dataKey: `school_${school.id}`,
-      label: school.nombre || `Escuela ${school.id}`,
+  const seriesItems = useMemo(() => {
+    return displayedItems.map(item => ({
+      dataKey: `item_${item.id}`,
+      label: item.nombre || `${titleLabel} ${item.id}`,
     }));
-  }, [displayedSchools]);
+  }, [displayedItems, titleLabel]);
+
+  const itemTotals = useMemo(() => {
+    const totals = displayedItems.map(item => {
+      let numIndicadores = 0;
+      let metaPlaneada = 0;
+      let metaEjecutada = 0;
+
+      statsByEscuela.forEach(row => {
+        const itemData = row.schools[String(item.id)];
+        if (itemData) {
+          numIndicadores += itemData.numIndicadores;
+          metaPlaneada += itemData.metaPlaneada;
+          metaEjecutada += itemData.metaEjecutada;
+        }
+      });
+
+      const execPercentStr = formatExecutionPercent(metaPlaneada, metaEjecutada);
+      const execPercentNum = parseSheetNumber(execPercentStr) || 0;
+
+      return {
+        id: item.id,
+        nombre: item.nombre,
+        numIndicadores,
+        metaPlaneada,
+        metaEjecutada,
+        execPercentStr,
+        execPercentNum
+      };
+    });
+
+    return totals;
+  }, [displayedItems, statsByEscuela]);
+
+  const globalTotals = useMemo(() => {
+    let totalIndicadores = 0;
+    let totalPlaneada = 0;
+    let totalEjecutada = 0;
+
+    itemTotals.forEach(item => {
+      totalIndicadores += item.numIndicadores;
+      totalPlaneada += item.metaPlaneada;
+      totalEjecutada += item.metaEjecutada;
+    });
+    
+    const execPercentStr = formatExecutionPercent(totalPlaneada, totalEjecutada);
+    const execPercentNum = parseSheetNumber(execPercentStr) || 0;
+
+    return {
+      totalIndicadores,
+      execPercentStr,
+      execPercentNum
+    };
+  }, [itemTotals]);
+
+  const pieChartDataIndicadores = useMemo(() => {
+    return [
+      [titleLabel, "Número de Indicadores"],
+      ...itemTotals.map(item => [item.nombre, item.numIndicadores])
+    ];
+  }, [itemTotals, titleLabel]);
+
+  const pieChartDataEjecucion = useMemo(() => {
+    return [
+      [titleLabel, "Porcentaje de Ejecución"],
+      ...itemTotals.map(item => [item.nombre, item.execPercentNum])
+    ];
+  }, [itemTotals, titleLabel]);
+
+  const pieChartOptionsEjecucion = useMemo(() => {
+    const slices = {};
+    itemTotals.forEach((item, index) => {
+      const offsetValue = Math.min(Math.max(item.execPercentNum / 250, 0), 0.6); 
+      slices[index] = { offset: offsetValue }; 
+    });
+    return {
+      title: `Porcentaje de Ejecución por ${titleLabel}`,
+      is3D: false,
+      pieHole: 0.2,
+      slices: slices,
+      legend: { position: "right", alignment: "center" }
+    };
+  }, [itemTotals, titleLabel]);
 
   return (
     <Box sx={{ padding: "20px" }}>
@@ -322,6 +425,7 @@ function Consolidados({ data, userInfo }) {
           >
             <ToggleButton value="desafios">Por Desafíos</ToggleButton>
             <ToggleButton value="escuelas">Por Escuela</ToggleButton>
+            <ToggleButton value="oficinas">Por Oficina</ToggleButton>
           </ToggleButtonGroup>
 
           <FormControl size="small" sx={{ minWidth: 120 }}>
@@ -350,16 +454,17 @@ function Consolidados({ data, userInfo }) {
               <TableHead>
                 <TableRow sx={{ backgroundColor: "#34495e" }}>
                   <TableCell sx={{ color: "white", fontWeight: "bold" }}>Desafíos</TableCell>
+                  <TableCell sx={{ color: "white", fontWeight: "bold", textAlign: "right" }}>N.º indicadores</TableCell>
                   <TableCell sx={{ color: "white", fontWeight: "bold", textAlign: "right" }}>Meta Planeada</TableCell>
                   <TableCell sx={{ color: "white", fontWeight: "bold", textAlign: "right" }}>Meta Ejecutada</TableCell>
-                  <TableCell sx={{ color: "white", fontWeight: "bold", textAlign: "right" }}>Meta Ejecutada %</TableCell>
+                  <TableCell sx={{ color: "white", fontWeight: "bold", textAlign: "right" }}>Porcentaje ejecutado</TableCell>
                   <TableCell sx={{ color: "white", fontWeight: "bold", textAlign: "right" }}>Pendiente por ejecutar</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {statsByDesafio.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} align="center" sx={{ py: 3 }}>
+                    <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
                       No hay datos para mostrar en este año.
                     </TableCell>
                   </TableRow>
@@ -367,6 +472,7 @@ function Consolidados({ data, userInfo }) {
                   statsByDesafio.map((row) => (
                     <TableRow key={row.id_desafio} hover>
                       <TableCell sx={{ fontWeight: "medium" }}>{toText(row.desafioNombre)}</TableCell>
+                      <TableCell align="right">{row.numIndicadores}</TableCell>
                       <TableCell align="right">{row.metaPlaneada}</TableCell>
                       <TableCell align="right">{row.metaEjecutada}</TableCell>
                       <TableCell align="right">
@@ -405,7 +511,7 @@ function Consolidados({ data, userInfo }) {
                   dataset={chartDataDesafios}
                   xAxis={[{ scaleType: "band", dataKey: "desafio" }]}
                   yAxis={[{ min: 0, max: 100 }]}
-                  series={[{ dataKey: "ejecutado", label: "Meta Ejecutada %", color: "#3498db" }]}
+                  series={[{ dataKey: "ejecutado", label: "Porcentaje ejecutado", color: "#3498db" }]}
                   margin={{ top: 20, bottom: 80, left: 50, right: 20 }}
                   slotProps={{
                     legend: {
@@ -419,21 +525,21 @@ function Consolidados({ data, userInfo }) {
         </Box>
       )}
 
-      {viewType === "escuelas" && (
+      {(viewType === "escuelas" || viewType === "oficinas") && (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <Typography variant="h6" sx={{ color: "#34495e" }}>Vista por Escuela</Typography>
+            <Typography variant="h6" sx={{ color: "#34495e" }}>Vista por {titleLabel}</Typography>
             <FormControl size="small" sx={{ minWidth: 200 }}>
-              <InputLabel>Filtrar por Escuela</InputLabel>
+              <InputLabel>Filtrar por {titleLabel}</InputLabel>
               <Select
-                value={selectedSchool}
-                label="Filtrar por Escuela"
-                onChange={(e) => setSelectedSchool(e.target.value)}
+                value={selectedItem}
+                label={`Filtrar por ${titleLabel}`}
+                onChange={(e) => setSelectedItem(e.target.value)}
               >
-                <MenuItem value="all">Todas las escuelas</MenuItem>
-                {activeSchools.map((school) => (
-                  <MenuItem key={school.id} value={String(school.id)}>
-                    {school.nombre}
+                <MenuItem value="all">Todas las {viewType}</MenuItem>
+                {activeItems.map((item) => (
+                  <MenuItem key={item.id} value={String(item.id)}>
+                    {item.nombre}
                   </MenuItem>
                 ))}
               </Select>
@@ -445,17 +551,17 @@ function Consolidados({ data, userInfo }) {
               <TableHead>
                 <TableRow sx={{ backgroundColor: "#34495e" }}>
                   <TableCell rowSpan={2} sx={{ color: "white", fontWeight: "bold", borderRight: "1px solid rgba(224, 224, 224, 0.3)" }}>
-                    Desafíos
+                    Desafíos 
                   </TableCell>
-                  {displayedSchools.length > 0 ? (
-                    displayedSchools.map((school) => (
+                  {displayedItems.length > 0 ? (
+                    displayedItems.map((item) => (
                       <TableCell 
-                        key={school.id} 
+                        key={item.id} 
                         colSpan={3} 
                         align="center" 
                         sx={{ color: "white", fontWeight: "bold", borderRight: "1px solid rgba(224, 224, 224, 0.3)" }}
                       >
-                        {school.nombre}
+                        {item.nombre}
                       </TableCell>
                     ))
                   ) : (
@@ -463,34 +569,34 @@ function Consolidados({ data, userInfo }) {
                   )}
                 </TableRow>
                 <TableRow sx={{ backgroundColor: "#e2e8f0" }}>
-                  {displayedSchools.map((school) => (
-                    <React.Fragment key={school.id}>
-                      <TableCell align="right" sx={{ fontWeight: "bold", borderLeft: "1px solid rgba(224, 224, 224, 0.3)" }}>M. Planeada</TableCell>
+                  {displayedItems.map((item) => (
+                    <React.Fragment key={item.id}>
+                      <TableCell align="right" sx={{ fontWeight: "bold", borderLeft: "1px solid rgba(224, 224, 224, 0.3)" }}>N.º indicadores</TableCell>
                       <TableCell align="right" sx={{ fontWeight: "bold" }}>M. Ejecutada %</TableCell>
                       <TableCell align="right" sx={{ fontWeight: "bold", borderRight: "1px solid rgba(224, 224, 224, 0.3)" }}>Pendiente</TableCell>
                     </React.Fragment>
                   ))}
-                  {displayedSchools.length === 0 && <TableCell />}
+                  {displayedItems.length === 0 && <TableCell />}
                 </TableRow>
               </TableHead>
               <TableBody>
                 {statsByEscuela.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={1 + displayedSchools.length * 3} align="center" sx={{ py: 3 }}>
+                    <TableCell colSpan={1 + displayedItems.length * 3} align="center" sx={{ py: 3 }}>
                       No hay datos para mostrar en este año y filtros.
                     </TableCell>
                   </TableRow>
                 ) : (
                   statsByEscuela.map((row) => (
                     <TableRow key={row.id_desafio} hover>
-                      <TableCell sx={{ fontWeight: "medium", borderRight: "1px solid rgba(224, 224, 224, 1)" }}>
+                      <TableCell align="left" sx={{ fontWeight: "medium" }}>
                         {row.desafioNombre}
                       </TableCell>
-                      {displayedSchools.map((school) => {
-                        const schoolData = row.schools[String(school.id)];
-                        if (!schoolData) {
+                      {displayedItems.map((item) => {
+                        const itemData = row.schools[String(item.id)];
+                        if (!itemData) {
                           return (
-                            <React.Fragment key={school.id}>
+                            <React.Fragment key={item.id}>
                               <TableCell align="right" sx={{ borderLeft: "1px solid rgba(224, 224, 224, 1)" }}>-</TableCell>
                               <TableCell align="right">-</TableCell>
                               <TableCell align="right" sx={{ borderRight: "1px solid rgba(224, 224, 224, 1)" }}>-</TableCell>
@@ -498,9 +604,9 @@ function Consolidados({ data, userInfo }) {
                           );
                         }
                         return (
-                          <React.Fragment key={school.id}>
+                          <React.Fragment key={item.id}>
                             <TableCell align="right" sx={{ borderLeft: "1px solid rgba(224, 224, 224, 1)" }}>
-                              {schoolData.metaPlaneada}
+                              {itemData.numIndicadores}
                             </TableCell>
                             <TableCell align="right">
                               <Box
@@ -509,19 +615,19 @@ function Consolidados({ data, userInfo }) {
                                   px: 1,
                                   py: 0.5,
                                   borderRadius: 1,
-                                  backgroundColor: schoolData.metaEjecutadaNum >= 90 ? "#d4edda" :
-                                                  schoolData.metaEjecutadaNum >= 50 ? "#cce5ff" :
-                                                  schoolData.metaEjecutadaNum >= 30 ? "#fff3cd" : "#f8d7da",
-                                  color: schoolData.metaEjecutadaNum >= 90 ? "#155724" :
-                                         schoolData.metaEjecutadaNum >= 50 ? "#004085" :
-                                         schoolData.metaEjecutadaNum >= 30 ? "#856404" : "#721c24",
+                                  backgroundColor: itemData.metaEjecutadaNum >= 90 ? "#d4edda" :
+                                                  itemData.metaEjecutadaNum >= 50 ? "#cce5ff" :
+                                                  itemData.metaEjecutadaNum >= 30 ? "#fff3cd" : "#f8d7da",
+                                  color: itemData.metaEjecutadaNum >= 90 ? "#155724" :
+                                         itemData.metaEjecutadaNum >= 50 ? "#004085" :
+                                         itemData.metaEjecutadaNum >= 30 ? "#856404" : "#721c24",
                                 }}
                               >
-                                {schoolData.metaEjecutadaStr}
+                                {itemData.metaEjecutadaStr}
                               </Box>
                             </TableCell>
                             <TableCell align="right" sx={{ borderRight: "1px solid rgba(224, 224, 224, 1)" }}>
-                              {schoolData.pendienteStr}
+                              {itemData.pendienteStr}
                             </TableCell>
                           </React.Fragment>
                         );
@@ -533,17 +639,17 @@ function Consolidados({ data, userInfo }) {
             </Table>
           </TableContainer>
 
-          {chartDataEscuelas.length > 0 && seriesEscuelas.length > 0 && (
+          {chartDataItems.length > 0 && seriesItems.length > 0 && (
             <Paper sx={{ p: 3, boxShadow: 3, borderRadius: 2 }}>
               <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: "bold", textAlign: "center" }}>
-                Porcentaje de Ejecución por Desafío y Escuela
+                Porcentaje de Ejecución por Desafío y {titleLabel}
               </Typography>
               <Box sx={{ width: "100%", height: 500 }}>
                 <BarChart
-                  dataset={chartDataEscuelas}
+                  dataset={chartDataItems}
                   xAxis={[{ scaleType: "band", dataKey: "desafio" }]}
                   yAxis={[{ min: 0, max: 100 }]}
-                  series={seriesEscuelas}
+                  series={seriesItems}
                   margin={{ top: 80, bottom: 80, left: 50, right: 20 }}
                   slotProps={{
                     legend: {
@@ -557,6 +663,92 @@ function Consolidados({ data, userInfo }) {
                 />
               </Box>
             </Paper>
+          )}
+
+          {itemTotals.length > 0 && (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <Typography variant="h6" sx={{ color: "#34495e" }}>Resumen Total por {titleLabel}</Typography>
+              <TableContainer component={Paper} sx={{ boxShadow: 3, borderRadius: 2 }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ backgroundColor: "#34495e" }}>
+                      <TableCell sx={{ color: "white", fontWeight: "bold" }}>{titleLabel}</TableCell>
+                      <TableCell sx={{ color: "white", fontWeight: "bold", textAlign: "right" }}>N.º indicadores</TableCell>
+                      <TableCell sx={{ color: "white", fontWeight: "bold", textAlign: "right" }}>Porcentaje de ejecución</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {itemTotals.map((row) => (
+                      <TableRow key={row.id} hover>
+                        <TableCell sx={{ fontWeight: "medium" }}>{row.nombre}</TableCell>
+                        <TableCell align="right">{row.numIndicadores}</TableCell>
+                        <TableCell align="right">
+                          <Box
+                            sx={{
+                              display: "inline-block",
+                              px: 1,
+                              py: 0.5,
+                              borderRadius: 1,
+                              backgroundColor: row.execPercentNum >= 90 ? "#d4edda" :
+                                              row.execPercentNum >= 50 ? "#cce5ff" :
+                                              row.execPercentNum >= 30 ? "#fff3cd" : "#f8d7da",
+                              color: row.execPercentNum >= 90 ? "#155724" :
+                                     row.execPercentNum >= 50 ? "#004085" :
+                                     row.execPercentNum >= 30 ? "#856404" : "#721c24",
+                            }}
+                          >
+                            {row.execPercentStr}
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow sx={{ backgroundColor: "#f8f9fa" }}>
+                      <TableCell sx={{ fontWeight: "bold" }}>TOTAL</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: "bold" }}>{globalTotals.totalIndicadores}</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                        <Box
+                          sx={{
+                            display: "inline-block",
+                            px: 1,
+                            py: 0.5,
+                            borderRadius: 1,
+                            backgroundColor: globalTotals.execPercentNum >= 90 ? "#d4edda" :
+                                            globalTotals.execPercentNum >= 50 ? "#cce5ff" :
+                                            globalTotals.execPercentNum >= 30 ? "#fff3cd" : "#f8d7da",
+                            color: globalTotals.execPercentNum >= 90 ? "#155724" :
+                                   globalTotals.execPercentNum >= 50 ? "#004085" :
+                                   globalTotals.execPercentNum >= 30 ? "#856404" : "#721c24",
+                          }}
+                        >
+                          {globalTotals.execPercentStr}
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </TableContainer>
+
+              <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", justifyContent: "center" }}>
+                <Paper sx={{ p: 2, boxShadow: 3, borderRadius: 2, flex: "1 1 45%", minWidth: "300px" }}>
+                  <Chart
+                    chartType="PieChart"
+                    data={pieChartDataIndicadores}
+                    options={{ title: `Número de Indicadores por ${titleLabel}`, is3D: true, legend: { position: "right", alignment: "center" } }}
+                    width={"100%"}
+                    height={"400px"}
+                  />
+                </Paper>
+                <Paper sx={{ p: 2, boxShadow: 3, borderRadius: 2, flex: "1 1 45%", minWidth: "300px" }}>
+                  <Chart
+                    chartType="PieChart"
+                    data={pieChartDataEjecucion}
+                    options={pieChartOptionsEjecucion}
+                    width={"100%"}
+                    height={"400px"}
+                  />
+                </Paper>
+              </Box>
+            </Box>
           )}
         </Box>
       )}
