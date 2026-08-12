@@ -583,7 +583,7 @@ const Seguimientos = ({ data, userInfo }) => {
           const numero = parseSheetNumber(indicator.executionPercent);
           if (typeof numero !== "number") return inner;
           totalIndicadoresValidos++;
-          if (numero >= 90) totalEjecutados++;
+          if (numero > 0) totalEjecutados++;
           return inner + numero;
         }, 0)
       );
@@ -1095,7 +1095,7 @@ const Seguimientos = ({ data, userInfo }) => {
               Seguimientos
             </Typography>
             <Typography variant="body2" sx={{ color: "text.secondary" }}>
-              {filterableIndicators.length} indicadores con seguimiento
+              {totals.totalIndicadores} indicadores con seguimiento
             </Typography>
           </Box>
 
@@ -1316,7 +1316,7 @@ const Seguimientos = ({ data, userInfo }) => {
                 <TableBody>
                   <TableRow>
                     <TableCell sx={{ fontWeight: 800 }}>Total indicadores</TableCell>
-                    <TableCell sx={{ fontWeight: 800 }}>{filterableIndicators.length}</TableCell>
+                    <TableCell sx={{ fontWeight: 800 }}>{totals.totalIndicadores}</TableCell>
                   </TableRow>
                   {challengeCounts.map((item) => (
                     <TableRow key={item.desafio.id}>
@@ -1426,23 +1426,23 @@ const Seguimientos = ({ data, userInfo }) => {
                     </TableBody>
                   </Table>
                 </TableContainer>
-              </Box>
+              </Box>|
             </Box>
 
             <Box className="seguimientos-stats-cards">
-              <Paper className="seguimientos-stat-card" elevation={0}>
-                <Typography className="seguimientos-stat-label">
+              <Paper className="seguimientos-stat-card" elevation={0} sx={{backgroundColor: "#b4b4b4ff"}} >
+                <Typography className="seguimientos-stat-label" sx={{color: "#000000ff", fontWeight: 800}} >
                   Indicadores ejecutados
                 </Typography>
-                <Typography className="seguimientos-stat-value">
+                <Typography className="seguimientos-stat-value" sx={{color: "#000000ff", fontWeight: 800}} >
                   {totals.numEjecutados}
                 </Typography>
               </Paper>
-              <Paper className="seguimientos-stat-card" elevation={0}>
-                <Typography className="seguimientos-stat-label">
+              <Paper className="seguimientos-stat-card" elevation={0} sx={{backgroundColor: "#b4b4b4ff"}} >
+                <Typography className="seguimientos-stat-label" sx={{color: "#000000ff", fontWeight: 800}} >
                   Porcentaje de cumplimiento
                 </Typography>
-                <Typography className="seguimientos-stat-value">
+                <Typography className="seguimientos-stat-value" sx={{color: "#000000ff", fontWeight: 800}} >
                   {totals.porcentajeCumplimiento.toFixed(1).replace(".", ",")}%
                 </Typography>
               </Paper>

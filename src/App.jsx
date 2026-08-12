@@ -113,6 +113,7 @@ const App = () => {
 
   const handleChange = (event, newValue) => {
     setIsLoading(true);
+    sessionStorage.removeItem("indicators.lastExpandedId");
     setTimeout(() => {
       setCurrentTab(newValue);
       setIsLoading(false);
