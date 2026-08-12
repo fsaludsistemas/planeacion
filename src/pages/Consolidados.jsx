@@ -36,7 +36,9 @@ const formatExecutionPercent = (plannedValue, executedValue) => {
   const planned = parseSheetNumber(plannedValue);
   const executed = parseSheetNumber(executedValue);
   if (planned === null || executed === null || planned === 0) return "Sin registro";
-  return `${((executed / planned) * 100).toFixed(1).replace(".", ",")}%`;
+  let percent = (executed / planned) * 100;
+  if (percent > 100) percent = 100;
+  return `${percent.toFixed(1).replace(".", ",")}%`;
 };
 
 const sortById = (items) => [...items].sort((a, b) => Number(a?.id ?? 0) - Number(b?.id ?? 0));
@@ -572,7 +574,7 @@ function Consolidados({ data, userInfo }) {
                   {displayedItems.map((item) => (
                     <React.Fragment key={item.id}>
                       <TableCell align="right" sx={{ fontWeight: "bold", borderLeft: "1px solid rgba(224, 224, 224, 0.3)" }}>N.º indicadores</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: "bold" }}>M. Ejecutada %</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: "bold" }}>Porcentaje ejecutado</TableCell>
                       <TableCell align="right" sx={{ fontWeight: "bold", borderRight: "1px solid rgba(224, 224, 224, 0.3)" }}>Pendiente</TableCell>
                     </React.Fragment>
                   ))}
@@ -589,7 +591,7 @@ function Consolidados({ data, userInfo }) {
                 ) : (
                   statsByEscuela.map((row) => (
                     <TableRow key={row.id_desafio} hover>
-                      <TableCell align="left" sx={{ fontWeight: "medium" }}>
+                      <TableCell align="left" sx={{ fontWeight: "medium", whiteSpace: "nowrap" }}>
                         {row.desafioNombre}
                       </TableCell>
                       {displayedItems.map((item) => {

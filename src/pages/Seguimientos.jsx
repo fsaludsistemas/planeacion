@@ -66,7 +66,9 @@ const formatExecutionPercent = (plannedValue, executedValue) => {
   const executed = parseSheetNumber(executedValue);
   if (planned === null || executed === null || planned === 0)
     return "Sin registro";
-  return `${((executed / planned) * 100).toFixed(1).replace(".", ",")}%`;
+  let percent = (executed / planned) * 100;
+  if (percent > 100) percent = 100;
+  return `${percent.toFixed(1).replace(".", ",")}%`;
 };
 
 const sortById = (items) =>
