@@ -1243,13 +1243,13 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
           className="summary-title indicator-summary-dependency"
           sx={{ fontWeight: 700 }}
         >
-          Avance
+          Meta
         </Typography>
-        <Typography
+                <Typography
           className="summary-title indicator-summary-dependency"
           sx={{ fontWeight: 700 }}
         >
-          Meta
+          Avance
         </Typography>
       </Paper>
 
@@ -1296,16 +1296,16 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
                   sx={{ fontWeight: 700 }}
                   className="indicator-summary-dependency"
                 >
-                  {getAvanceDisplay(
-                    indicator.avance?.avance_2026,
-                    indicator.meta?.meta_2026,
-                  )}
+                  {indicator.meta?.meta_2026}
                 </Typography>
                 <Typography
                   sx={{ fontWeight: 700 }}
                   className="indicator-summary-dependency"
                 >
-                  {indicator.meta?.meta_2026}
+                   {getAvanceDisplay(
+                    indicator.avance?.avance_2026,
+                    indicator.meta?.meta_2026,
+                  )}
                 </Typography>
               </Box>
             </AccordionSummary>

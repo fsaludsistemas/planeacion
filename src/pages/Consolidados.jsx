@@ -323,6 +323,7 @@ function Consolidados({ data, userInfo }) {
     return displayedItems.map(item => ({
       dataKey: `item_${item.id}`,
       label: item.nombre || `${titleLabel} ${item.id}`,
+      valueFormatter: (v) => (v != null ? `${v}%` : ""),
     }));
   }, [displayedItems, titleLabel]);
 
@@ -389,7 +390,10 @@ function Consolidados({ data, userInfo }) {
   const pieChartDataEjecucion = useMemo(() => {
     return [
       [titleLabel, "Porcentaje de Ejecución"],
-      ...itemTotals.map(item => [item.nombre, item.execPercentNum])
+      ...itemTotals.map(item => [
+        item.nombre,
+        item.execPercentNum === 0 ? 0.0000001 : item.execPercentNum
+      ])
     ];
   }, [itemTotals, titleLabel]);
 
@@ -513,8 +517,9 @@ function Consolidados({ data, userInfo }) {
                   dataset={chartDataDesafios}
                   xAxis={[{ scaleType: "band", dataKey: "desafio" }]}
                   yAxis={[{ min: 0, max: 100 }]}
-                  series={[{ dataKey: "ejecutado", label: "Porcentaje ejecutado", color: "#3498db" }]}
+                  series={[{ dataKey: "ejecutado", label: "Porcentaje ejecutado", color: "#3498db", valueFormatter: (v) => (v != null ? `${v}%` : "") }]}
                   margin={{ top: 20, bottom: 80, left: 50, right: 20 }}
+                  barLabel="value"
                   slotProps={{
                     legend: {
                       position: { vertical: 'top', horizontal: 'middle' }
@@ -653,6 +658,7 @@ function Consolidados({ data, userInfo }) {
                   yAxis={[{ min: 0, max: 100 }]}
                   series={seriesItems}
                   margin={{ top: 80, bottom: 80, left: 50, right: 20 }}
+                  barLabel="value"
                   slotProps={{
                     legend: {
                       position: { vertical: 'top', horizontal: 'middle' },
@@ -735,7 +741,7 @@ function Consolidados({ data, userInfo }) {
                   <Chart
                     chartType="PieChart"
                     data={pieChartDataIndicadores}
-                    options={{ title: `Número de Indicadores por ${titleLabel}`, is3D: true, legend: { position: "right", alignment: "center" } }}
+                    options={{ title: `Número de Indicadores por ${titleLabel}`, is3D: false, legend: { position: "right", alignment: "center" } }}
                     width={"100%"}
                     height={"400px"}
                   />
@@ -744,7 +750,12 @@ function Consolidados({ data, userInfo }) {
                   <Chart
                     chartType="PieChart"
                     data={pieChartDataEjecucion}
-                    options={pieChartOptionsEjecucion}
+                    options={{
+                      title: `Porcentaje de Ejecución por ${titleLabel}`,
+                      is3D: false,
+                      sliceVisibilityThreshold: 0,
+                      legend: { position: "right", alignment: "center" }
+                    }}
                     width={"100%"}
                     height={"400px"}
                   />
