@@ -56,6 +56,7 @@ const CreateIndicator = ({
   indicadoresResultado,
   usuarios,
   periodos,
+  initialDependencyId = "",
   onClose,
   onSubmit,
 }) => {
@@ -68,14 +69,17 @@ const CreateIndicator = ({
 
   useEffect(() => {
     if (open) {
-      setForm(emptyForm);
+      setForm({
+        ...emptyForm,
+        id_dependencia: String(initialDependencyId || ""),
+      });
       setRespondeADialogOpen(false);
       setRespondeADraft("");
       setRespondeAError("");
       setRespondeAItems(respondeAs);
       setMetaType("");
     }
-  }, [open, respondeAs]);
+  }, [open, respondeAs, initialDependencyId]);
 
   const fallbackOptions = (items, relatedItems) =>
     relatedItems.length ? relatedItems : items;
@@ -253,7 +257,7 @@ const CreateIndicator = ({
       if (val === "") return val;
       return metaType === "percentage" ? `${val}%` : val;
     };
-    
+
     onSubmit({
       ...form,
       meta_2025: formatMeta(form.meta_2025),
@@ -461,8 +465,16 @@ const CreateIndicator = ({
                   value={metaType}
                   onChange={(e) => setMetaType(e.target.value)}
                 >
-                  <FormControlLabel value="number" control={<Radio />} label="Número" />
-                  <FormControlLabel value="percentage" control={<Radio />} label="Porcentaje" />
+                  <FormControlLabel
+                    value="number"
+                    control={<Radio />}
+                    label="Número"
+                  />
+                  <FormControlLabel
+                    value="percentage"
+                    control={<Radio />}
+                    label="Porcentaje"
+                  />
                 </RadioGroup>
               </FormControl>
             </Grid>
@@ -473,7 +485,10 @@ const CreateIndicator = ({
                 type="number"
                 inputProps={{ step: "any" }}
                 InputProps={{
-                  endAdornment: metaType === "percentage" ? <InputAdornment position="end">%</InputAdornment> : null,
+                  endAdornment:
+                    metaType === "percentage" ? (
+                      <InputAdornment position="end">%</InputAdornment>
+                    ) : null,
                 }}
                 value={form.meta_2025}
                 onChange={handleMetaChange("meta_2025")}
@@ -487,7 +502,10 @@ const CreateIndicator = ({
                 type="number"
                 inputProps={{ step: "any" }}
                 InputProps={{
-                  endAdornment: metaType === "percentage" ? <InputAdornment position="end">%</InputAdornment> : null,
+                  endAdornment:
+                    metaType === "percentage" ? (
+                      <InputAdornment position="end">%</InputAdornment>
+                    ) : null,
                 }}
                 value={form.meta_2026}
                 onChange={handleMetaChange("meta_2026")}
@@ -501,7 +519,10 @@ const CreateIndicator = ({
                 type="number"
                 inputProps={{ step: "any" }}
                 InputProps={{
-                  endAdornment: metaType === "percentage" ? <InputAdornment position="end">%</InputAdornment> : null,
+                  endAdornment:
+                    metaType === "percentage" ? (
+                      <InputAdornment position="end">%</InputAdornment>
+                    ) : null,
                 }}
                 value={form.meta_2027}
                 onChange={handleMetaChange("meta_2027")}
@@ -515,7 +536,10 @@ const CreateIndicator = ({
                 type="number"
                 inputProps={{ step: "any" }}
                 InputProps={{
-                  endAdornment: metaType === "percentage" ? <InputAdornment position="end">%</InputAdornment> : null,
+                  endAdornment:
+                    metaType === "percentage" ? (
+                      <InputAdornment position="end">%</InputAdornment>
+                    ) : null,
                 }}
                 value={form.meta_2028}
                 onChange={handleMetaChange("meta_2028")}
@@ -529,7 +553,10 @@ const CreateIndicator = ({
                 type="number"
                 inputProps={{ step: "any" }}
                 InputProps={{
-                  endAdornment: metaType === "percentage" ? <InputAdornment position="end">%</InputAdornment> : null,
+                  endAdornment:
+                    metaType === "percentage" ? (
+                      <InputAdornment position="end">%</InputAdornment>
+                    ) : null,
                 }}
                 value={form.meta_2029}
                 onChange={handleMetaChange("meta_2029")}
@@ -543,7 +570,10 @@ const CreateIndicator = ({
                 type="number"
                 inputProps={{ step: "any" }}
                 InputProps={{
-                  endAdornment: metaType === "percentage" ? <InputAdornment position="end">%</InputAdornment> : null,
+                  endAdornment:
+                    metaType === "percentage" ? (
+                      <InputAdornment position="end">%</InputAdornment>
+                    ) : null,
                 }}
                 value={form.meta_2030}
                 onChange={handleMetaChange("meta_2030")}

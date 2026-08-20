@@ -17,6 +17,11 @@
   flex-wrap: wrap;
 }
 
+.seguimientos-view-tabs {
+  display: flex;
+  flex-wrap: wrap;
+}
+
 
 .seguimientos-advanced-filters .filters-secondary-box {
   margin-top: 10px;
@@ -120,10 +125,9 @@
 }
 
 .seguimientos-stat-value {
-  font-size: 2rem;
   font-weight: 800;
-  color: #2e7d32;
-  line-height: 1.1;
+  color: #000000;
+  size: 2.5rem;
 }
 
 .seguimientos-empty {

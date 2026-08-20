@@ -86,11 +86,13 @@ function Usuarios({ data, userInfo }) {
   const [form, setForm] = useState({
     correo: "",
     id_dependencia: "",
+    editor: false,
   });
   const [editForm, setEditForm] = useState({
     id: "",
     correo: "",
     id_dependencia: "",
+    editor: false,
   });
   const [selectedUser, setSelectedUser] = useState(null);
   const [atTooltipOpen, setAtTooltipOpen] = useState(false);
@@ -134,6 +136,7 @@ function Usuarios({ data, userInfo }) {
     setForm({
       correo: "",
       id_dependencia: "",
+      editor: false,
     });
   };
 
@@ -162,6 +165,7 @@ function Usuarios({ data, userInfo }) {
       id: "",
       correo: "",
       id_dependencia: "",
+      editor: false,
     });
     setError("");
   };
@@ -217,6 +221,7 @@ function Usuarios({ data, userInfo }) {
       const response = await createSheetRow("USUARIOS", {
         id_dependencia: String(form.id_dependencia),
         correo: fullEmail,
+        editor: Boolean(form.editor),
         rol: "usuario",
       });
 
@@ -231,6 +236,7 @@ function Usuarios({ data, userInfo }) {
             id: createdId || String(Date.now()),
             id_dependencia: String(form.id_dependencia),
             correo: fullEmail,
+            editor: Boolean(form.editor),
             rol: "usuario",
           },
         ]),
@@ -259,6 +265,8 @@ function Usuarios({ data, userInfo }) {
         "",
       ),
       id_dependencia: String(user?.id_dependencia ?? ""),
+      editor:
+        user?.editor === true || String(user?.editor).toLowerCase() === "true",
     });
     setEditOpen(true);
   };
@@ -291,6 +299,7 @@ function Usuarios({ data, userInfo }) {
       await updateSheetRow("USUARIOS", editForm.id, {
         correo: fullEmail,
         id_dependencia: String(editForm.id_dependencia),
+        editor: Boolean(editForm.editor),
       });
 
       setUsers((prev) =>
@@ -301,6 +310,7 @@ function Usuarios({ data, userInfo }) {
                   ...user,
                   correo: fullEmail,
                   id_dependencia: String(editForm.id_dependencia),
+                  editor: Boolean(editForm.editor),
                 }
               : user,
           ),
@@ -440,36 +450,39 @@ function Usuarios({ data, userInfo }) {
             <Typography variant="h5" sx={{ fontWeight: 800 }}>
               Gestión de Usuarios
             </Typography>
-            
+
             <Typography variant="body2" color="text.secondary">
               Administra los usuarios del sistema.
             </Typography>
             <FormControl>
-          <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5, mt: 2  }}>
-            Tipo de dependencia
-          </Typography>
-          <RadioGroup
-            row
-            value={filterTipoDependencia}
-            onChange={(e) => setFilterTipoDependencia(e.target.value)}
-          >
-            <FormControlLabel
-              value="TODAS"
-              control={<Radio size="small" />}
-              label="Todas"
-            />
-            <FormControlLabel
-              value="Oficina"
-              control={<Radio size="small" />}
-              label="Oficina"
-            />
-            <FormControlLabel
-              value="Escuela"
-              control={<Radio size="small" />}
-              label="Escuela"
-            />
-          </RadioGroup>
-        </FormControl>
+              <Typography
+                variant="body2"
+                sx={{ fontWeight: 600, mb: 0.5, mt: 2 }}
+              >
+                Tipo de dependencia
+              </Typography>
+              <RadioGroup
+                row
+                value={filterTipoDependencia}
+                onChange={(e) => setFilterTipoDependencia(e.target.value)}
+              >
+                <FormControlLabel
+                  value="TODAS"
+                  control={<Radio size="small" />}
+                  label="Todas"
+                />
+                <FormControlLabel
+                  value="Oficina"
+                  control={<Radio size="small" />}
+                  label="Oficina"
+                />
+                <FormControlLabel
+                  value="Escuela"
+                  control={<Radio size="small" />}
+                  label="Escuela"
+                />
+              </RadioGroup>
+            </FormControl>
           </Box>
           <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
             <Button variant="outlined" onClick={handleEmailModeToggle}>
@@ -510,7 +523,6 @@ function Usuarios({ data, userInfo }) {
         </Alert>
       )}
 
-      
       <TableContainer component={Paper}>
         <Table size="small">
           <TableHead>
@@ -594,8 +606,8 @@ function Usuarios({ data, userInfo }) {
                     "& input": {
                       width: "48%",
                       minWidth: "48%",
-                      textAlign:"right",
-                      fontSize:"1.3rem",
+                      textAlign: "right",
+                      fontSize: "1.3rem",
                     },
                   },
                   endAdornment: (
@@ -633,6 +645,20 @@ function Usuarios({ data, userInfo }) {
                 ))}
               </Select>
             </FormControl>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={Boolean(form.editor)}
+                  onChange={(event) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      editor: event.target.checked,
+                    }))
+                  }
+                />
+              }
+              label="Creacion"
+            />
           </Box>
         </DialogContent>
         <DialogActions>
@@ -706,6 +732,20 @@ function Usuarios({ data, userInfo }) {
                 ))}
               </Select>
             </FormControl>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={Boolean(editForm.editor)}
+                  onChange={(event) =>
+                    setEditForm((prev) => ({
+                      ...prev,
+                      editor: event.target.checked,
+                    }))
+                  }
+                />
+              }
+              label="Creacion"
+            />
           </Box>
         </DialogContent>
         <DialogActions>

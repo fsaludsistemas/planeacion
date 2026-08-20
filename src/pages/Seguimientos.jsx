@@ -209,7 +209,9 @@ const Seguimientos = ({ data, userInfo }) => {
     () => new Map(desafios.map((item) => [String(item.id), item])),
     [desafios],
   );
-  const convergenteById = useMemo(() => new Map(estrategiasConvergentes.map((item) => [String(item.id), item])),
+  const convergenteById = useMemo(
+    () =>
+      new Map(estrategiasConvergentes.map((item) => [String(item.id), item])),
     [estrategiasConvergentes],
   );
   const respondeAById = useMemo(
@@ -325,7 +327,9 @@ const Seguimientos = ({ data, userInfo }) => {
       const dependency = tipoDependenciaById.get(
         String(indicator.id_dependencia || ""),
       );
-      const convergente = convergenteById.get(String(indicator.id_estrategia_convergente || ""));
+      const convergente = convergenteById.get(
+        String(indicator.id_estrategia_convergente || ""),
+      );
       if (!desafio) return;
       const meta = metaByIndicatorId.get(String(indicator.id));
       const avance = avanceByIndicatorId.get(String(indicator.id));
@@ -339,7 +343,7 @@ const Seguimientos = ({ data, userInfo }) => {
 
       const normalizedName = normalize(indicator.nombre);
       const existingInd = existing.indicators.find(
-        (i) => normalize(i.nombre) === normalizedName
+        (i) => normalize(i.nombre) === normalizedName,
       );
 
       if (existingInd) {
@@ -348,18 +352,23 @@ const Seguimientos = ({ data, userInfo }) => {
           return typeof parsed === "number" ? parsed : 0;
         };
 
-        const sumMeta = getSafeNumber(existingInd.metaValue) + getSafeNumber(metaValue);
-        const sumAvance = getSafeNumber(existingInd.avanceValue) + getSafeNumber(avanceValue);
+        const sumMeta =
+          getSafeNumber(existingInd.metaValue) + getSafeNumber(metaValue);
+        const sumAvance =
+          getSafeNumber(existingInd.avanceValue) + getSafeNumber(avanceValue);
 
         existingInd.metaValue = sumMeta;
         existingInd.avanceValue = sumAvance;
-        existingInd.executionPercent = formatExecutionPercent(sumMeta, sumAvance);
+        existingInd.executionPercent = formatExecutionPercent(
+          sumMeta,
+          sumAvance,
+        );
 
         if (dependency?.nombre) {
           const depName = dependency.nombre;
           existingInd.dependencyCounts.set(
             depName,
-            (existingInd.dependencyCounts.get(depName) || 0) + 1
+            (existingInd.dependencyCounts.get(depName) || 0) + 1,
           );
         }
       } else {
@@ -589,19 +598,27 @@ const Seguimientos = ({ data, userInfo }) => {
       );
     }, 0);
 
-    const promedio = totalIndicadoresValidos ? executed / totalIndicadoresValidos : 0;
+    const promedio = totalIndicadoresValidos
+      ? executed / totalIndicadoresValidos
+      : 0;
     const pendingPorcentaje = Math.max(0, 100 - promedio);
 
     const sinRegistroCount = totalIndicadoresGeneral - totalIndicadoresValidos;
-    const sinRegistro = totalIndicadoresGeneral ? (sinRegistroCount / totalIndicadoresGeneral) * 100 : 0;
-    const pesoValidos = totalIndicadoresGeneral ? (totalIndicadoresValidos / totalIndicadoresGeneral) : 0;
+    const sinRegistro = totalIndicadoresGeneral
+      ? (sinRegistroCount / totalIndicadoresGeneral) * 100
+      : 0;
+    const pesoValidos = totalIndicadoresGeneral
+      ? totalIndicadoresValidos / totalIndicadoresGeneral
+      : 0;
 
     return {
       promedio,
       pending: pendingPorcentaje,
       numEjecutados: totalEjecutados,
       totalIndicadores: totalIndicadoresGeneral,
-      porcentajeCumplimiento: totalIndicadoresGeneral ? (totalEjecutados / totalIndicadoresGeneral) * 100 : 0,
+      porcentajeCumplimiento: totalIndicadoresGeneral
+        ? (totalEjecutados / totalIndicadoresGeneral) * 100
+        : 0,
       chartData: {
         ejecutado: promedio * pesoValidos,
         pendiente: pendingPorcentaje * pesoValidos,
@@ -615,7 +632,7 @@ const Seguimientos = ({ data, userInfo }) => {
   // Los desafíos se ordenan por id numérico.
   const challengeCounts = useMemo(() => {
     const sorted = [...rowsByDesafio].sort(
-      (a, b) => Number(a.desafio.id ?? 0) - Number(b.desafio.id ?? 0)
+      (a, b) => Number(a.desafio.id ?? 0) - Number(b.desafio.id ?? 0),
     );
     return sorted.map((group) => ({
       desafio: group.desafio,
@@ -918,11 +935,11 @@ const Seguimientos = ({ data, userInfo }) => {
     const cx = 100;
     const cy = 100;
     const radius = 80;
-    
+
     const ejecutado = totals.chartData?.ejecutado || 0;
     const pendiente = totals.chartData?.pendiente || 0;
     const sinRegistro = totals.chartData?.sinRegistro || 0;
-    
+
     const executedAngle = (ejecutado / 100) * 2 * Math.PI;
     const pendingAngle = (pendiente / 100) * 2 * Math.PI;
     const sinRegistroAngle = (sinRegistro / 100) * 2 * Math.PI;
@@ -966,7 +983,7 @@ const Seguimientos = ({ data, userInfo }) => {
     ctx.lineWidth = 2;
     ctx.strokeStyle = "#ffffff";
     let lineAngle = -Math.PI / 2;
-    [executedAngle, pendingAngle, sinRegistroAngle].forEach(angle => {
+    [executedAngle, pendingAngle, sinRegistroAngle].forEach((angle) => {
       if (angle > 0) {
         ctx.beginPath();
         ctx.moveTo(cx, cy);
@@ -1002,7 +1019,7 @@ const Seguimientos = ({ data, userInfo }) => {
       lx + 22,
       ly + 12,
     );
-    
+
     ly += 25;
     ctx.fillStyle = "#9E9E9E";
     ctx.fillRect(lx, ly, 15, 15);
@@ -1315,8 +1332,12 @@ const Seguimientos = ({ data, userInfo }) => {
                 </TableHead>
                 <TableBody>
                   <TableRow>
-                    <TableCell sx={{ fontWeight: 800 }}>Total indicadores</TableCell>
-                    <TableCell sx={{ fontWeight: 800 }}>{totals.totalIndicadores}</TableCell>
+                    <TableCell sx={{ fontWeight: 800 }}>
+                      Total indicadores
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 800 }}>
+                      {totals.totalIndicadores}
+                    </TableCell>
                   </TableRow>
                   {challengeCounts.map((item) => (
                     <TableRow key={item.desafio.id}>
@@ -1374,7 +1395,6 @@ const Seguimientos = ({ data, userInfo }) => {
                   }}
                 />
               </Box>
-
               {/* Contador de colores */}
               <Box className="seguimientos-summary-section">
                 <Typography variant="h6" sx={{ fontWeight: 800, mb: 1 }}>
@@ -1384,7 +1404,9 @@ const Seguimientos = ({ data, userInfo }) => {
                   <Table size="small">
                     <TableBody>
                       <TableRow>
-                        <TableCell sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}>
+                        <TableCell
+                          sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}
+                        >
                           Mayores de 90%
                         </TableCell>
                         <TableCell sx={{ backgroundColor: "lightgreen" }}>
@@ -1392,7 +1414,9 @@ const Seguimientos = ({ data, userInfo }) => {
                         </TableCell>
                       </TableRow>
                       <TableRow>
-                        <TableCell sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}>
+                        <TableCell
+                          sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}
+                        >
                           Entre 50% y 89%
                         </TableCell>
                         <TableCell sx={{ backgroundColor: "lightblue" }}>
@@ -1400,7 +1424,9 @@ const Seguimientos = ({ data, userInfo }) => {
                         </TableCell>
                       </TableRow>
                       <TableRow>
-                        <TableCell sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}>
+                        <TableCell
+                          sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}
+                        >
                           Entre 30% y 49%
                         </TableCell>
                         <TableCell sx={{ backgroundColor: "yellow" }}>
@@ -1408,7 +1434,9 @@ const Seguimientos = ({ data, userInfo }) => {
                         </TableCell>
                       </TableRow>
                       <TableRow>
-                        <TableCell sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}>
+                        <TableCell
+                          sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}
+                        >
                           Entre 0% y 29%
                         </TableCell>
                         <TableCell sx={{ backgroundColor: "salmon" }}>
@@ -1416,7 +1444,9 @@ const Seguimientos = ({ data, userInfo }) => {
                         </TableCell>
                       </TableRow>
                       <TableRow>
-                        <TableCell sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}>
+                        <TableCell
+                          sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}
+                        >
                           Sin registro
                         </TableCell>
                         <TableCell sx={{ backgroundColor: "grey" }}>
@@ -1426,23 +1456,51 @@ const Seguimientos = ({ data, userInfo }) => {
                     </TableBody>
                   </Table>
                 </TableContainer>
-              </Box>|
+              </Box>
             </Box>
 
             <Box className="seguimientos-stats-cards">
-              <Paper className="seguimientos-stat-card" elevation={0} sx={{backgroundColor: "#b4b4b4ff"}} >
-                <Typography className="seguimientos-stat-label" sx={{color: "#000000ff", fontWeight: 800}} >
+              <Paper
+                className="seguimientos-stat-card"
+                elevation={0}
+                sx={{ backgroundColor: "#b4b4b4ff" }}
+              >
+                <Typography
+                  className="seguimientos-stat-label"
+                  sx={{ color: "#000000ff" }}
+                >
                   Indicadores ejecutados
                 </Typography>
-                <Typography className="seguimientos-stat-value" sx={{color: "#000000ff", fontWeight: 800}} >
+                <Typography
+                  className="seguimientos-stat-value"
+                  sx={{
+                    color: "#000000ff",
+                    fontWeight: 800,
+                    fontSize: "1.5rem",
+                  }}
+                >
                   {totals.numEjecutados}
                 </Typography>
               </Paper>
-              <Paper className="seguimientos-stat-card" elevation={0} sx={{backgroundColor: "#b4b4b4ff"}} >
-                <Typography className="seguimientos-stat-label" sx={{color: "#000000ff", fontWeight: 800}} >
+              <Paper
+                className="seguimientos-stat-card"
+                elevation={0}
+                sx={{ backgroundColor: "#b4b4b4ff" }}
+              >
+                <Typography
+                  className="seguimientos-stat-label"
+                  sx={{ color: "#000000ff" }}
+                >
                   Porcentaje de cumplimiento
                 </Typography>
-                <Typography className="seguimientos-stat-value" sx={{color: "#000000ff", fontWeight: 800}} >
+                <Typography
+                  className="seguimientos-stat-value"
+                  sx={{
+                    color: "#000000ff",
+                    fontWeight: 800,
+                    fontSize: "1.5rem",
+                  }}
+                >
                   {totals.porcentajeCumplimiento.toFixed(1).replace(".", ",")}%
                 </Typography>
               </Paper>
@@ -1457,19 +1515,25 @@ const Seguimientos = ({ data, userInfo }) => {
           <TableBody>
             <TableRow>
               <TableCell sx={{ fontWeight: 800 }}>Desafío</TableCell>
-              <TableCell sx={{ fontWeight: 800 }}>Estrategia Convergente</TableCell>
+              <TableCell sx={{ fontWeight: 800 }}>
+                Estrategia Convergente
+              </TableCell>
               <TableCell sx={{ fontWeight: 800 }}>Nombre Indicador</TableCell>
               <TableCell sx={{ fontWeight: 800 }}>Dependencia</TableCell>
               <TableCell sx={{ fontWeight: 800 }}>Meta planeada</TableCell>
               <TableCell sx={{ fontWeight: 800 }}>Meta ejecutada</TableCell>
-              <TableCell sx={{ fontWeight: 800 }}>Porcentaje ejecutado</TableCell>
+              <TableCell sx={{ fontWeight: 800 }}>
+                Porcentaje ejecutado
+              </TableCell>
             </TableRow>
             {rowsByDesafio.map((group) => {
               // Agrupar los indicadores del desafío por estrategia convergente
               const convergenteGroups = [];
               const convergenteMap = new Map();
               group.indicators.forEach((indicator) => {
-                const key = toTextOrBlank(indicator.convergenteName) || "(Sin estrategia convergente)";
+                const key =
+                  toTextOrBlank(indicator.convergenteName) ||
+                  "(Sin estrategia convergente)";
                 if (!convergenteMap.has(key)) {
                   convergenteMap.set(key, []);
                   convergenteGroups.push(key);
@@ -1482,12 +1546,14 @@ const Seguimientos = ({ data, userInfo }) => {
               return convergenteGroups.map((convKey, convIndex) => {
                 const convIndicators = convergenteMap.get(convKey);
                 return convIndicators.map((indicator, indIndex) => (
-                  <TableRow key={`${group.desafio.id}-${convKey}-${indicator.id}`}>
+                  <TableRow
+                    key={`${group.desafio.id}-${convKey}-${indicator.id}`}
+                  >
                     {/* Celda de desafío: rowSpan total de todos los indicadores del desafío, solo en la primera fila */}
                     {convIndex === 0 && indIndex === 0 && (
                       <TableCell
                         rowSpan={totalIndicatorsInDesafio}
-                        sx={{ fontWeight: 700}}
+                        sx={{ fontWeight: 700 }}
                       >
                         {toText(group.desafio.titulo)}
                       </TableCell>
@@ -1496,7 +1562,13 @@ const Seguimientos = ({ data, userInfo }) => {
                     {indIndex === 0 && (
                       <TableCell
                         rowSpan={convIndicators.length}
-                        sx={{ fontWeight: 600, fontStyle: convKey === "(Sin estrategia convergente)" ? "italic" : "normal" }}
+                        sx={{
+                          fontWeight: 600,
+                          fontStyle:
+                            convKey === "(Sin estrategia convergente)"
+                              ? "italic"
+                              : "normal",
+                        }}
                       >
                         {convKey}
                       </TableCell>
@@ -1514,14 +1586,18 @@ const Seguimientos = ({ data, userInfo }) => {
                     <TableCell>{formatRawValue(indicator.metaValue)}</TableCell>
                     <TableCell
                       sx={{
-                        backgroundColor: percentageClass(indicator.executionPercent),
+                        backgroundColor: percentageClass(
+                          indicator.executionPercent,
+                        ),
                       }}
                     >
                       {formatRawValue(indicator.avanceValue)}
                     </TableCell>
                     <TableCell
                       sx={{
-                        backgroundColor: percentageClass(indicator.executionPercent),
+                        backgroundColor: percentageClass(
+                          indicator.executionPercent,
+                        ),
                       }}
                     >
                       {indicator.executionPercent}
