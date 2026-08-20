@@ -71,6 +71,9 @@ const GoogleLogin = ({ onLoginSuccess }) => {
           correo: matchedUser.correo || email,
           rol: matchedUser.rol || "Usuario",
           id_dependencia: String(matchedUser.id_dependencia || ""),
+          editor:
+            matchedUser.editor === true ||
+            String(matchedUser.editor).toLowerCase() === "true",
           name: formatDisplayName(email, decodedToken?.name),
         };
 

@@ -6,7 +6,6 @@ import LoadingIndicator from "./components/LoadingIndicator";
 import GoogleLogin from "./components/GoogleLogin";
 import IndicatorsPage from "./pages/IndicatorsPage";
 import Usuarios from "./pages/Usuarios";
-import Seguimientos from "./pages/Seguimientos";
 import Consolidados from "./pages/Consolidados";
 import { getData } from "./api/api";
 import "./App.css";
@@ -33,7 +32,10 @@ const App = () => {
   };
 
   const userRole = useMemo(
-    () => String(userInfo?.rol || userInfo?.permiso || "").trim().toLowerCase(),
+    () =>
+      String(userInfo?.rol || userInfo?.permiso || "")
+        .trim()
+        .toLowerCase(),
     [userInfo],
   );
   const canManageUsers =
@@ -154,14 +156,8 @@ const App = () => {
     }
 
     const consolidationTab = canManageUsers ? 2 : 1;
-    const seguimientosTab = canManageUsers ? 3 : 2;
-
     if (currentTab === consolidationTab) {
       return <Consolidados data={appData} userInfo={userInfo} />;
-    }
-
-    if (currentTab === seguimientosTab) {
-      return <Seguimientos data={appData} userInfo={userInfo} />;
     }
 
     return null;
@@ -191,10 +187,6 @@ const App = () => {
                 )}
                 <Tab
                   label="Consolidado Ind."
-                  sx={{ fontSize: "1rem", fontWeight: "bold" }}
-                />
-                <Tab
-                  label="Seguimientos"
                   sx={{ fontSize: "1rem", fontWeight: "bold" }}
                 />
               </Tabs>

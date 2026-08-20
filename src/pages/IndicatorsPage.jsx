@@ -488,6 +488,21 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
     userRole === "sistemas" ||
     userRole === "administrador";
   const isRegularUser = userRole === "usuario";
+  const currentUserRecord = useMemo(
+    () =>
+      userById.get(String(sessionUser?.id || "")) ||
+      usuarios.find(
+        (item) =>
+          String(item.correo || "").toLowerCase() ===
+          String(sessionUser?.correo || "").toLowerCase(),
+      ),
+    [userById, usuarios, sessionUser],
+  );
+  const hasCreationPermission =
+    sessionUser?.editor === true ||
+    String(sessionUser?.editor).toLowerCase() === "true" ||
+    currentUserRecord?.editor === true ||
+    String(currentUserRecord?.editor).toLowerCase() === "true";
 
   const baseRows = useMemo(() => {
     return indicators.map((indicator) => ({
@@ -715,6 +730,13 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
   };
 
   const canEditAllIndicators = isAdminOrSystems;
+  const canCreateIndicators =
+    isAdminOrSystems || (hasCreationPermission && Boolean(userDependencyId));
+  const createDependencies = isAdminOrSystems
+    ? dependencias
+    : dependencias.filter(
+        (item) => String(item.id) === String(userDependencyId),
+      );
   const currentUserId = String(sessionUser?.id || "");
   const isIndicatorOwnedByUser = (indicator) =>
     String(indicator.responsable || "") === currentUserId;
@@ -960,6 +982,12 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
     setActionError("");
     try {
       const indicatorPayload = { ...payload };
+      if (!isAdminOrSystems) {
+        if (!canCreateIndicators) {
+          throw new Error("No tienes permiso para crear indicadores.");
+        }
+        indicatorPayload.id_dependencia = userDependencyId;
+      }
       const metaFields = [
         "meta_2025",
         "meta_2026",
@@ -1055,7 +1083,7 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
               {filteredRows.length} de {visibleRows.length} indicadores visibles
             </Typography>
           </Box>
-          {canEditAllIndicators && (
+          {canCreateIndicators && (
             <Button
               variant="contained"
               startIcon={<AddIcon />}
@@ -1245,7 +1273,7 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
         >
           Meta
         </Typography>
-                <Typography
+        <Typography
           className="summary-title indicator-summary-dependency"
           sx={{ fontWeight: 700 }}
         >
@@ -1302,7 +1330,7 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
                   sx={{ fontWeight: 700 }}
                   className="indicator-summary-dependency"
                 >
-                   {getAvanceDisplay(
+                  {getAvanceDisplay(
                     indicator.avance?.avance_2026,
                     indicator.meta?.meta_2026,
                   )}
@@ -1557,7 +1585,7 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
       <CreateIndicator
         open={createOpen}
         loading={busyId === "create"}
-        dependencias={dependencias}
+        dependencias={createDependencies}
         desafios={desafios}
         estrategiasConvergentes={estrategiasConvergentes}
         estrategiasFacultad={estrategiasFacultad}
@@ -1567,6 +1595,7 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
         onCreateRespondeA={createRespondeA}
         usuarios={usuarios}
         periodos={periodos}
+        initialDependencyId={isAdminOrSystems ? "" : userDependencyId}
         metas={metas}
         onClose={() => setCreateOpen(false)}
         onSubmit={createIndicator}
