@@ -115,6 +115,11 @@ const compactConvergenteLabel = (name) => {
   return match?.[0] || toText(name);
 };
 
+const compactFacultadLabel = (name) => {
+  const match = String(name ?? "").match(/^Estrategia\s+FS\s+\d+(?:\.\d+)*/i);
+  return match?.[0] || toText(name);
+};
+
 function Consolidados({ data, userInfo }) {
   useEffect(() => {
     document.title = "Consolidados";
@@ -1759,7 +1764,11 @@ function Consolidados({ data, userInfo }) {
                         </span>
                       </Tooltip>
                     </TableCell>
-                    <TableCell>{toText(row.facultadNombre)}</TableCell>
+                    <TableCell>
+                      <Tooltip title={toText(row.facultadNombre)}>
+                        <span>{compactFacultadLabel(row.facultadNombre)}</span>
+                      </Tooltip>
+                    </TableCell>
                     {showDependencyColumn && (
                       <TableCell>{toText(row.dependenciaNombre)}</TableCell>
                     )}
