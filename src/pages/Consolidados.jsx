@@ -129,6 +129,8 @@ function Consolidados({ data, userInfo }) {
   const [selectedDependency, setSelectedDependency] = useState("");
   const [selectedTipoDependencia, setSelectedTipoDependencia] = useState("");
   const [selectedDesafio, setSelectedDesafio] = useState("");
+  const [selectedEje, setSelectedEje] = useState("");
+  const [groupingMode, setGroupingMode] = useState("desafio");
   const [selectedRespondeA, setSelectedRespondeA] = useState("");
   const [selectedConvergente, setSelectedConvergente] = useState("");
   const [selectedFacultad, setSelectedFacultad] = useState("");
@@ -156,6 +158,14 @@ function Consolidados({ data, userInfo }) {
     () => sortById(getSheet(data, "INDICADORES_PRODUCTO")),
     [data],
   );
+  const ejes = useMemo(() => {
+    const values = new Set(
+      indicators
+        .map((indicator) => String(indicator.eje ?? "").trim())
+        .filter(Boolean),
+    );
+    return [...values].sort((a, b) => Number(a) - Number(b));
+  }, [indicators]);
   const metas = useMemo(() => sortById(getSheet(data, "METAS")), [data]);
   const avances = useMemo(() => sortById(getSheet(data, "AVANCES")), [data]);
   const dependencias = useMemo(
@@ -205,6 +215,9 @@ function Consolidados({ data, userInfo }) {
     [data],
   );
 
+  const dimensionLabel = groupingMode === "eje" ? "Eje" : "Desafío";
+  const dimensionLabelPlural = groupingMode === "eje" ? "Ejes" : "Desafíos";
+
   useEffect(() => {
     if (!canSeeAll && userDependencyId) setSelectedDependency(userDependencyId);
   }, [canSeeAll, userDependencyId]);
@@ -212,6 +225,8 @@ function Consolidados({ data, userInfo }) {
   const filteredIndicators = useMemo(
     () =>
       indicators.filter((indicator) => {
+        if (groupingMode === "eje" && !String(indicator.eje ?? "").trim())
+          return false;
         if (
           !canSeeAll &&
           userDependencyId &&
@@ -227,6 +242,8 @@ function Consolidados({ data, userInfo }) {
           selectedDesafio &&
           String(indicator.id_desafio || "") !== selectedDesafio
         )
+          return false;
+        if (selectedEje && String(indicator.eje ?? "").trim() !== selectedEje)
           return false;
         if (
           selectedConvergente &&
@@ -271,6 +288,8 @@ function Consolidados({ data, userInfo }) {
       userDependencyId,
       selectedDependency,
       selectedDesafio,
+      selectedEje,
+      groupingMode,
       selectedConvergente,
       selectedFacultad,
       selectedPrograma,
@@ -294,14 +313,16 @@ function Consolidados({ data, userInfo }) {
     }
   }, [availableYears, selectedYear]);
 
-  // View 1: Aggregate data by Desafío (Vista por Desafíos)
+  // View 1: Aggregate data by the selected dimension.
   const statsByDesafio = useMemo(() => {
-    // 1. Group indicators by normalized name to deduplicate them within the same Desafío (like in Seguimientos)
-    const groupedByDesafio = new Map();
+    const groupedByDimension = new Map();
 
     filteredIndicators.forEach((indicator) => {
       const desafio = desafioById.get(String(indicator.id_desafio || ""));
-      if (!desafio) return;
+      const eje = String(indicator.eje ?? "").trim();
+      const dimensionId =
+        groupingMode === "eje" ? eje : String(desafio?.id || "");
+      if (!dimensionId || (groupingMode === "desafio" && !desafio)) return;
 
       const meta = metaByIndicatorId.get(String(indicator.id));
       const avance = avanceByIndicatorId.get(String(indicator.id));
@@ -310,8 +331,9 @@ function Consolidados({ data, userInfo }) {
 
       if (!hasYearValue(metaValue) && !hasYearValue(avanceValue)) return;
 
-      const existing = groupedByDesafio.get(String(desafio.id)) || {
+      const existing = groupedByDimension.get(dimensionId) || {
         desafio,
+        dimensionId,
         indicators: [],
       };
 
@@ -335,11 +357,11 @@ function Consolidados({ data, userInfo }) {
         });
       }
 
-      groupedByDesafio.set(String(desafio.id), existing);
+      groupedByDimension.set(dimensionId, existing);
     });
 
     // 2. Now sum up all indicators for each Desafío to get the challenge total
-    const result = [...groupedByDesafio.values()].map((group) => {
+    const result = [...groupedByDimension.values()].map((group) => {
       let sumPlanned = 0;
       let sumExecuted = 0;
 
@@ -355,8 +377,11 @@ function Consolidados({ data, userInfo }) {
       const pendingPercent = Math.max(0, 100 - execPercentNum);
 
       return {
-        id_desafio: group.desafio.id,
-        desafioNombre: group.desafio.titulo || `Desafío ${group.desafio.id}`,
+        id_desafio: group.dimensionId,
+        desafioNombre:
+          groupingMode === "eje"
+            ? `Eje ${group.dimensionId}`
+            : group.desafio.titulo || `Desafío ${group.desafio.id}`,
         numIndicadores: group.indicators.length,
         metaPlaneada: sumPlanned,
         metaEjecutada: sumExecuted,
@@ -377,6 +402,7 @@ function Consolidados({ data, userInfo }) {
     metaByIndicatorId,
     avanceByIndicatorId,
     selectedYear,
+    groupingMode,
   ]);
 
   const totalSummaryIndicators = statsByDesafio.reduce(
@@ -391,12 +417,19 @@ function Consolidados({ data, userInfo }) {
 
     filteredIndicators.forEach((indicator) => {
       const idDesafio = String(indicator.id_desafio || "");
+      const eje = String(indicator.eje ?? "").trim();
+      const dimensionId = groupingMode === "eje" ? eje : idDesafio;
       const idDependencia = String(indicator.id_dependencia || "");
 
       const desafio = desafioById.get(idDesafio);
       const dependencia = dependenciaById.get(idDependencia);
 
-      if (!desafio || !dependencia) return;
+      if (
+        (!desafio && groupingMode === "desafio") ||
+        !dimensionId ||
+        !dependencia
+      )
+        return;
 
       const meta = metaByIndicatorId.get(String(indicator.id));
       const avance = avanceByIndicatorId.get(String(indicator.id));
@@ -405,9 +438,9 @@ function Consolidados({ data, userInfo }) {
 
       if (!hasYearValue(metaValue) && !hasYearValue(avanceValue)) return;
 
-      const key = `${idDesafio}_${idDependencia}`;
+      const key = `${dimensionId}_${idDependencia}`;
       const existing = grouped.get(key) || {
-        id_desafio: idDesafio,
+        id_desafio: dimensionId,
         desafio,
         id_dependencia: idDependencia,
         dependencia,
@@ -457,7 +490,10 @@ function Consolidados({ data, userInfo }) {
       return {
         id_desafio: group.id_desafio,
         id_dependencia: group.id_dependencia,
-        desafioNombre: `Desafío ${group.id_desafio}`,
+        desafioNombre:
+          groupingMode === "eje"
+            ? `Eje ${group.id_desafio}`
+            : `Desafío ${group.id_desafio}`,
         escuelaNombre:
           group.dependencia.nombre || `Escuela ${group.id_dependencia}`,
         numIndicadores: group.rawCount,
@@ -497,6 +533,7 @@ function Consolidados({ data, userInfo }) {
     metaByIndicatorId,
     avanceByIndicatorId,
     selectedYear,
+    groupingMode,
   ]);
 
   // Extract active dependencias
@@ -718,7 +755,11 @@ function Consolidados({ data, userInfo }) {
       const planned = meta ? meta[`meta_${selectedYear}`] : null;
       const executed = avance ? avance[`avance_${selectedYear}`] : null;
       if (!hasYearValue(planned) && !hasYearValue(executed)) return;
-      const key = `${indicator.id_desafio}_${normalize(indicator.nombre)}`;
+      const dimensionId =
+        groupingMode === "eje"
+          ? String(indicator.eje ?? "").trim()
+          : String(indicator.id_desafio || "");
+      const key = `${dimensionId}_${normalize(indicator.nombre)}`;
       const existing = grouped.get(key);
       if (existing) {
         const dependencyId = String(indicator.id_dependencia || "");
@@ -739,7 +780,10 @@ function Consolidados({ data, userInfo }) {
       }
       grouped.set(key, {
         ...indicator,
-        desafioNombre: desafioById.get(String(indicator.id_desafio))?.titulo,
+        desafioNombre:
+          groupingMode === "eje"
+            ? `Eje ${String(indicator.eje ?? "").trim()}`
+            : desafioById.get(String(indicator.id_desafio))?.titulo,
         dependencyCounts: {
           [toText(
             dependenciaById.get(String(indicator.id_dependencia))?.nombre,
@@ -770,6 +814,7 @@ function Consolidados({ data, userInfo }) {
     avanceByIndicatorId,
     selectedYear,
     desafioById,
+    groupingMode,
     dependenciaById,
     convergentes,
     facultades,
@@ -777,7 +822,7 @@ function Consolidados({ data, userInfo }) {
 
   const detailedColumns = useMemo(
     () => [
-      "Desafío",
+      dimensionLabel,
       "Estrategia convergente",
       "Estrategia facultad",
       ...(showDependencyColumn ? ["Dependencia"] : []),
@@ -786,7 +831,7 @@ function Consolidados({ data, userInfo }) {
       "Meta ejecutada",
       "% ejecutado",
     ],
-    [showDependencyColumn],
+    [showDependencyColumn, dimensionLabel],
   );
 
   const summaryTotals = useMemo(() => {
@@ -850,6 +895,7 @@ function Consolidados({ data, userInfo }) {
     setSelectedDependency(canSeeAll ? "" : userDependencyId);
     setSelectedTipoDependencia("");
     setSelectedDesafio("");
+    setSelectedEje("");
     setSelectedRespondeA("");
     setSelectedConvergente("");
     setSelectedFacultad("");
@@ -1048,7 +1094,7 @@ function Consolidados({ data, userInfo }) {
             : "-";
         }),
       ]);
-      addTable(["Desafío", ...columns], body, {
+      addTable([dimensionLabel, ...columns], body, {
         columnStyles: { 0: { cellWidth: 48 } },
         styles: { fontSize: 6, cellPadding: 2, overflow: "linebreak" },
       });
@@ -1184,10 +1230,10 @@ function Consolidados({ data, userInfo }) {
     );
 
     doc.addPage("l");
-    addTitle("Consolidados - Por Desafíos");
+    addTitle(`Consolidados - Por ${dimensionLabelPlural}`);
     addTable(
       [
-        "Desafío",
+        dimensionLabel,
         "N.º indicadores",
         "Meta planeada",
         "Meta ejecutada",
@@ -1205,7 +1251,7 @@ function Consolidados({ data, userInfo }) {
     );
 
     doc.addPage("l");
-    addTitle("Consolidados - Por Desafíos - Gráfica");
+    addTitle(`Consolidados - Por ${dimensionLabelPlural} - Gráfica`);
     addCanvasImage(drawBarChart(statsByDesafio), margin, 28, 260, 104);
 
     addWideView("Consolidados - Por Escuela", activeSchools);
@@ -1225,6 +1271,17 @@ function Consolidados({ data, userInfo }) {
               {totalSummaryIndicators} indicadores
             </Typography>
           </Box>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={groupingMode === "eje"}
+                onChange={(event) =>
+                  setGroupingMode(event.target.checked ? "eje" : "desafio")
+                }
+              />
+            }
+            label={`Vista por ${dimensionLabelPlural}`}
+          />
           <FormControl size="small" sx={{ minWidth: 120 }}>
             <InputLabel>Año</InputLabel>
             <Select
@@ -1302,6 +1359,21 @@ function Consolidados({ data, userInfo }) {
               {desafios.map((item) => (
                 <MenuItem key={item.id} value={String(item.id)}>
                   {toText(item.titulo)}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl size="small" fullWidth>
+            <InputLabel>Eje</InputLabel>
+            <Select
+              value={selectedEje}
+              label="Eje"
+              onChange={(e) => setSelectedEje(e.target.value)}
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {ejes.map((eje) => (
+                <MenuItem key={eje} value={eje}>
+                  Eje {eje}
                 </MenuItem>
               ))}
             </Select>
@@ -1432,7 +1504,7 @@ function Consolidados({ data, userInfo }) {
       >
         <ToggleButton value="resumen">Resumen</ToggleButton>
         <ToggleButton value="indicadores">Detallado</ToggleButton>
-        <ToggleButton value="desafios">Por Desafíos</ToggleButton>
+        <ToggleButton value="desafios">Por {dimensionLabelPlural}</ToggleButton>
         {canSeeAllConsolidatedViews && (
           <>
             <ToggleButton value="escuelas">Por Escuela</ToggleButton>
@@ -1645,7 +1717,9 @@ function Consolidados({ data, userInfo }) {
             <Table size="small">
               <TableBody>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 800 }}>Desafío</TableCell>
+                  <TableCell sx={{ fontWeight: 800 }}>
+                    {dimensionLabel}
+                  </TableCell>
                   <TableCell sx={{ fontWeight: 800 }}>
                     Estrategia Convergente
                   </TableCell>
@@ -1669,10 +1743,12 @@ function Consolidados({ data, userInfo }) {
                     <TableCell>
                       <Tooltip title={toText(row.desafioNombre)}>
                         <span>
-                          {compactDesafioLabel(
-                            row.desafioNombre,
-                            row.id_desafio,
-                          )}
+                          {groupingMode === "eje"
+                            ? `Eje ${row.id_desafio}`
+                            : compactDesafioLabel(
+                                row.desafioNombre,
+                                row.id_desafio,
+                              )}
                         </span>
                       </Tooltip>
                     </TableCell>
@@ -1736,7 +1812,7 @@ function Consolidados({ data, userInfo }) {
       {viewType === "desafios" && (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <Typography variant="h6" sx={{ color: "#34495e" }}>
-            Vista por Desafíos
+            Vista por {dimensionLabelPlural}
           </Typography>
 
           <TableContainer
@@ -1747,7 +1823,7 @@ function Consolidados({ data, userInfo }) {
               <TableHead>
                 <TableRow sx={{ backgroundColor: "#34495e" }}>
                   <TableCell sx={{ color: "white", fontWeight: "bold" }}>
-                    Desafíos
+                    {dimensionLabelPlural}
                   </TableCell>
                   <TableCell
                     sx={{
@@ -1854,7 +1930,7 @@ function Consolidados({ data, userInfo }) {
                 variant="subtitle1"
                 sx={{ mb: 2, fontWeight: "bold", textAlign: "center" }}
               >
-                Porcentaje de Ejecución por Desafío
+                Porcentaje de Ejecución por {dimensionLabel}
               </Typography>
               <Box sx={{ width: "100%", height: 400 }}>
                 <BarChart
@@ -1929,7 +2005,7 @@ function Consolidados({ data, userInfo }) {
                       borderRight: "1px solid rgba(224, 224, 224, 0.3)",
                     }}
                   >
-                    Desafíos
+                    {dimensionLabelPlural}
                   </TableCell>
                   {displayedItems.length > 0 ? (
                     displayedItems.map((item) => (
@@ -2088,7 +2164,7 @@ function Consolidados({ data, userInfo }) {
                 variant="subtitle1"
                 sx={{ mb: 2, fontWeight: "bold", textAlign: "center" }}
               >
-                Porcentaje de Ejecución por Desafío y {titleLabel}
+                Porcentaje de Ejecución por {dimensionLabel} y {titleLabel}
               </Typography>
               <Box sx={{ width: "100%", height: 500, mb: 20 }}>
                 <BarChart
