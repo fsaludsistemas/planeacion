@@ -486,7 +486,8 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
   const isAdminOrSystems =
     userDependencyId === "0" ||
     userRole === "sistemas" ||
-    userRole === "administrador";
+    userRole === "administrador" ||
+    userRole === "calidad";
   const isRegularUser = userRole === "usuario";
   const currentUserRecord = useMemo(
     () =>

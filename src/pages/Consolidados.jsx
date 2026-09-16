@@ -91,7 +91,12 @@ const hasYearValue = (value) => {
 
 const isPrivilegedRole = (role) => {
   const value = normalize(role);
-  return value === "administrador" || value === "sistemas" || value === "0";
+  return (
+    value === "administrador" ||
+    value === "sistemas" ||
+    value === "calidad" ||
+    value === "0"
+  );
 };
 
 const percentageClass = (value) => {
