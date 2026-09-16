@@ -7,6 +7,7 @@ import GoogleLogin from "./components/GoogleLogin";
 import IndicatorsPage from "./pages/IndicatorsPage";
 import Usuarios from "./pages/Usuarios";
 import Consolidados from "./pages/Consolidados";
+import Documentos from "./pages/Documentos";
 import { getData } from "./api/api";
 import "./App.css";
 
@@ -41,6 +42,7 @@ const App = () => {
   const canManageUsers =
     userRole === "administrador" ||
     userRole === "sistemas" ||
+    userRole === "calidad" ||
     String(userInfo?.id || "") === "0";
 
   useEffect(() => {
@@ -160,6 +162,17 @@ const App = () => {
       return <Consolidados data={appData} userInfo={userInfo} />;
     }
 
+    const documentsTab = canManageUsers ? 3 : 2;
+    if (currentTab === documentsTab) {
+      return (
+        <Documentos
+          data={appData}
+          userInfo={userInfo}
+          onRefreshData={refreshAppData}
+        />
+      );
+    }
+
     return null;
   };
 
@@ -187,6 +200,10 @@ const App = () => {
                 )}
                 <Tab
                   label="Consolidado Ind."
+                  sx={{ fontSize: "1rem", fontWeight: "bold" }}
+                />
+                <Tab
+                  label="Documentos"
                   sx={{ fontSize: "1rem", fontWeight: "bold" }}
                 />
               </Tabs>

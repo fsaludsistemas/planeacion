@@ -64,7 +64,9 @@ const getSheet = (data, ...keys) => {
 
 const isPrivilegedRole = (role) => {
   const value = normalize(role);
-  return value === "administrador" || value === "sistemas";
+  return (
+    value === "administrador" || value === "sistemas" || value === "calidad"
+  );
 };
 
 function Usuarios({ data, userInfo }) {

@@ -174,6 +174,60 @@ SHEET_COLUMNS = {
 };
 ```
 
+
+## Subir archivos a Drive
+
+### Configuracion requerida
+
+La subida utiliza OAuth de la cuenta administradora. La Service Account sigue siendo necesaria para leer el spreadsheet y obtener el token almacenado en `USUARIOS`.
+
+- `EMAIL`: correo exacto del administrador. El backend busca este correo en la columna `correo` de `USUARIOS`.
+- `USUARIOS.refresh_token`: refresh token OAuth del administrador. Debe estar en la columna `refresh_token` de la fila del administrador.
+- `DRIVE_FOLDER_ID`: ID de la carpeta de Drive donde se almacenaran los archivos.
+- `GOOGLE_WEB_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` y `GOOGLE_REDIRECT_URI`: credenciales OAuth Web.
+
+El frontend nunca necesita conocer ni enviar el refresh token. Tampoco debe enviar un `access_token`.
+
+### Endpoint
+
+```text
+POST /upload-drive
+Content-Type: multipart/form-data
+```
+
+El archivo debe enviarse con el nombre de campo `file`. El limite actual es de 25 MB.
+
+No establezcas manualmente el header `Content-Type` cuando uses `FormData`; el navegador agrega automaticamente el boundary necesario.
+
+### Respuesta exitosa
+
+HTTP `201 Created`:
+
+```json
+{
+  "status": true,
+  "message": "Archivo subido correctamente.",
+  "fileId": "1AbC...",
+  "name": "informe.pdf",
+  "mimeType": "application/pdf",
+  "url": "https://drive.google.com/file/d/1AbC.../view",
+  "webViewLink": "https://drive.google.com/file/d/1AbC.../view",
+  "webContentLink": null
+}
+
+### Errores posibles
+
+`400 Bad Request`:
+
+```json
+{
+  "status": false,
+  "message": "Debes enviar un archivo en el campo \"file\"."
+}
+```
+
+Tambien puede indicar que el `refresh_token` no existe, fue revocado o expiro. En ese caso se debe repetir la autorizacion OAuth y actualizar `USUARIOS.refresh_token`.
+
 ## Instalacion local
 
 1. Clonar el repositorio

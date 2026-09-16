@@ -109,7 +109,12 @@ const getCurrentTime = () =>
 
 const isPrivilegedRole = (role) => {
   const value = normalize(role);
-  return value === "administrador" || value === "sistemas" || value === "0";
+  return (
+    value === "administrador" ||
+    value === "sistemas" ||
+    value === "calidad" ||
+    value === "0"
+  );
 };
 
 const matchesRespondeAFilter = (idRespondeA, filterValue, respondeAById) => {
