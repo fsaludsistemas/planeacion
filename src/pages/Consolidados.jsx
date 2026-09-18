@@ -1730,9 +1730,13 @@ function Consolidados({ data, userInfo }) {
                   <TableCell sx={{ fontWeight: 800 }}>
                     {dimensionLabel}
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 800 }}>
-                    Estrategia Convergente
-                  </TableCell>
+                  {groupingMode !== "eje" ? (
+                    <TableCell sx={{ fontWeight: 800 }}>
+                      Estrategia Convergente
+                    </TableCell>
+                  ) : (
+                    ""
+                  )}
                   <TableCell sx={{ fontWeight: 800 }}>
                     Estrategia Facultad
                   </TableCell>
@@ -1762,13 +1766,17 @@ function Consolidados({ data, userInfo }) {
                         </span>
                       </Tooltip>
                     </TableCell>
-                    <TableCell>
-                      <Tooltip title={toText(row.convergenteNombre)}>
-                        <span>
-                          {compactConvergenteLabel(row.convergenteNombre)}
-                        </span>
-                      </Tooltip>
-                    </TableCell>
+                    {groupingMode !== "eje" ? (
+                      <TableCell>
+                        <Tooltip title={toText(row.convergenteNombre)}>
+                          <span>
+                            {compactConvergenteLabel(row.convergenteNombre)}
+                          </span>
+                        </Tooltip>
+                      </TableCell>
+                    ) : (
+                      ""
+                    )}
                     <TableCell>
                       <Tooltip title={toText(row.facultadNombre)}>
                         <span>{compactFacultadLabel(row.facultadNombre)}</span>
