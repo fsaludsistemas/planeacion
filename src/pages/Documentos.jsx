@@ -18,7 +18,8 @@ import {
   Typography,
 } from "@mui/material";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
-import { updateSheetRow, uploadDrive } from "../api/api";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import { deleteDrive, updateSheetRow, uploadDrive } from "../api/api";
 
 const YEARS = [2026, 2027, 2029, 2030];
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
@@ -40,6 +41,16 @@ const sortById = (items) =>
 
 const getErrorMessage = (error, fallback) =>
   error?.response?.data?.message || error?.message || fallback;
+
+const getDriveFileId = (link) => {
+  const match = String(link || "").match(/\/file\/d\/([^/]+)/);
+  if (match?.[1]) return match[1];
+  try {
+    return new URL(link).searchParams.get("id");
+  } catch {
+    return null;
+  }
+};
 
 const Documentos = ({ data, userInfo, onRefreshData }) => {
   const [selectedYear, setSelectedYear] = useState(YEARS[0]);
@@ -88,7 +99,9 @@ const Documentos = ({ data, userInfo, onRefreshData }) => {
     setUploadingId(dependency.id);
     setMessage(null);
     try {
-      const uploadResponse = await uploadDrive(file);
+      const currentLink = String(dependency?.[selectedYear] || "").trim();
+      const fileId = currentLink ? getDriveFileId(currentLink) : undefined;
+      const uploadResponse = await uploadDrive(file, fileId);
       const link = uploadResponse?.webViewLink || uploadResponse?.url;
       if (!link)
         throw new Error("El backend no devolvió el enlace del archivo.");
@@ -105,6 +118,45 @@ const Documentos = ({ data, userInfo, onRefreshData }) => {
       setMessage({
         severity: "error",
         text: getErrorMessage(error, "No se pudo guardar el documento."),
+      });
+    } finally {
+      setUploadingId(null);
+    }
+  };
+
+  const handleDelete = async (dependency) => {
+    const link = String(dependency?.[selectedYear] || "").trim();
+    const fileId = getDriveFileId(link);
+    if (!fileId) {
+      setMessage({
+        severity: "error",
+        text: "No se pudo identificar el archivo de Drive.",
+      });
+      return;
+    }
+    if (
+      !window.confirm(
+        `Eliminar el documento ${selectedYear} de esta dependencia?`,
+      )
+    )
+      return;
+
+    setUploadingId(dependency.id);
+    setMessage(null);
+    try {
+      await deleteDrive(fileId);
+      await updateSheetRow("DEPENDENCIAS", dependency.id, {
+        [selectedYear]: "",
+      });
+      await onRefreshData();
+      setMessage({
+        severity: "success",
+        text: "Documento eliminado correctamente.",
+      });
+    } catch (error) {
+      setMessage({
+        severity: "error",
+        text: getErrorMessage(error, "No se pudo eliminar el documento."),
       });
     } finally {
       setUploadingId(null);
@@ -194,7 +246,11 @@ const Documentos = ({ data, userInfo, onRefreshData }) => {
                         }
                         disabled={isUploading}
                       >
-                        {isUploading ? "Subiendo..." : "Subir PDF"}
+                        {isUploading
+                          ? "Procesando..."
+                          : link
+                            ? "Editar PDF"
+                            : "Subir PDF"}
                         <input
                           hidden
                           type="file"
@@ -202,6 +258,17 @@ const Documentos = ({ data, userInfo, onRefreshData }) => {
                           onChange={(event) => handleUpload(dependency, event)}
                         />
                       </Button>
+                      {link && (
+                        <Button
+                          color="error"
+                          size="small"
+                          startIcon={<DeleteOutlineIcon />}
+                          onClick={() => handleDelete(dependency)}
+                          disabled={isUploading}
+                        >
+                          Eliminar
+                        </Button>
+                      )}
                     </TableCell>
                   )}
                 </TableRow>
