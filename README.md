@@ -228,6 +228,15 @@ HTTP `201 Created`:
 
 Tambien puede indicar que el `refresh_token` no existe, fue revocado o expiro. En ese caso se debe repetir la autorizacion OAuth y actualizar `USUARIOS.refresh_token`.
 
+
+### Editar o eliminar un archivo
+
+Conserva el `fileId` que devuelve `POST /upload-drive`. Para reemplazar el contenido
+del archivo manteniendo el mismo enlace de Drive, envia el nuevo archivo.
+
+Editar conserva el `fileId`, por lo que la URL guardada en el sheet sigue siendo
+valida. Al eliminar(usando el endpoint /upload-drive pero con el metodo de delete), hay que eliminar tambien la celda `url_2025`, `url_2026`, etc. de la evidencia para quitar el enlace que ya no existe.
+
 ## Instalacion local
 
 1. Clonar el repositorio

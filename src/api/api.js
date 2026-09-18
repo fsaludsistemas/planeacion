@@ -71,14 +71,25 @@ export const sendEmail = async (payload) => {
   }
 };
 
-export const uploadDrive = async (file) => {
+export const uploadDrive = async (file, fileId) => {
   try {
     const formData = new FormData();
     formData.append("file", file);
+    if (fileId) formData.append("fileId", fileId);
     const response = await api.post("/upload-drive", formData);
     return response.data;
   } catch (error) {
     console.error("Error uploading file to Drive:", error);
+    throw error;
+  }
+};
+
+export const deleteDrive = async (fileId) => {
+  try {
+    const response = await api.delete(`/upload-drive/${fileId}`);
+    return response.data;
+  } catch (error) {
+    console.error("Error deleting file from Drive:", error);
     throw error;
   }
 };
