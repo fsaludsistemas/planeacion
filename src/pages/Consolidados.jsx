@@ -28,6 +28,7 @@ import { Chart } from "react-google-charts";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import "../styles/seguimientos.css";
+import api from "../api/api";
 
 // Helper functions (copied from Seguimientos logic)
 const toText = (value) => String(value ?? "").trim() || "No disponible";
@@ -148,6 +149,7 @@ function Consolidados({ data, userInfo }) {
   const [selectedResultado, setSelectedResultado] = useState("");
   const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
   const [showDependencyColumn, setShowDependencyColumn] = useState(false);
+  const [isExportingDocs, setIsExportingDocs] = useState(false);
 
   const sessionUser = useMemo(() => {
     if (userInfo) return userInfo;
@@ -1269,6 +1271,170 @@ function Consolidados({ data, userInfo }) {
     doc.save(`consolidados_${selectedYear}.pdf`);
   };
 
+  const exportToGoogleDocs = async () => {
+    setIsExportingDocs(true);
+    try {
+      const getHexColor = (value) => {
+        const number = parseSheetNumber(value);
+        if (number === null || value === "Sin registro") return "#9e9e9e"; // gris
+        if (number >= 90) return "#90ee90"; // verde claro
+        if (number >= 50) return "#add8e6"; // azul claro
+        if (number >= 30) return "#ffff00"; // amarillo
+        if (number >= 0) return "#fa8072"; // salmon
+        return "transparent";
+      };
+
+      const dateStr = new Date().toLocaleDateString("es-CO");
+      const timeStr = new Date().toLocaleTimeString("es-CO", {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      const title = `Consolidados ${selectedYear} ${dateStr} ${timeStr}`;
+
+      let html = `<h1 style="text-align: center; font-family: sans-serif; color: #2c3e50;">${title}</h1>`;
+      
+      html += `<h2 style="font-family: sans-serif; color: #34495e; border-bottom: 2px solid #34495e; padding-bottom: 5px;">Resumen</h2>`;
+      html += `<table style="border-collapse: collapse; width: 100%; font-family: sans-serif; margin-bottom: 30px; border: 1px solid #ddd;">`;
+      html += `<thead><tr style="background-color: #34495e; color: white;">`;
+      html += `<th style="border: 1px solid #ddd; padding: 10px; text-align: left;">Concepto</th>`;
+      html += `<th style="border: 1px solid #ddd; padding: 10px; text-align: left;">Cantidad</th>`;
+      html += `</tr></thead><tbody>`;
+      
+      html += `<tr>`;
+      html += `<td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Total indicadores</td>`;
+      html += `<td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">${totalSummaryIndicators}</td>`;
+      html += `</tr>`;
+      
+      statsByDesafio.forEach(row => {
+        html += `<tr>`;
+        html += `<td style="border: 1px solid #ddd; padding: 8px;">${row.desafioNombre}</td>`;
+        html += `<td style="border: 1px solid #ddd; padding: 8px;">${row.numIndicadores}</td>`;
+        html += `</tr>`;
+      });
+      
+      html += `<tr>`;
+      html += `<td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Indicadores ejecutados</td>`;
+      html += `<td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">${summaryTotals.executedIndicators}</td>`;
+      html += `</tr>`;
+      
+      html += `<tr>`;
+      html += `<td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Porcentaje de cumplimiento</td>`;
+      html += `<td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">${summaryTotals.percentage.toFixed(1)}%</td>`;
+      html += `</tr>`;
+      
+      html += `</tbody></table>`;
+
+      const drawPieChart = (
+        values,
+        labels,
+        colors,
+        formatValue = (value) => `${value.toFixed(1)}%`
+      ) => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 520;
+        canvas.height = 320;
+        const context = canvas.getContext("2d");
+        const total = values.reduce((sum, value) => sum + value, 0);
+        const centerX = 150;
+        const centerY = 155;
+        const radius = 115;
+        let angle = -Math.PI / 2;
+
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        values.forEach((value, index) => {
+          if (value <= 0 || total <= 0) return;
+          const nextAngle = angle + (value / total) * Math.PI * 2;
+          context.beginPath();
+          context.moveTo(centerX, centerY);
+          context.arc(centerX, centerY, radius, angle, nextAngle);
+          context.closePath();
+          context.fillStyle = colors[index];
+          context.fill();
+          context.strokeStyle = "#ffffff";
+          context.lineWidth = 3;
+          context.stroke();
+          angle = nextAngle;
+        });
+
+        context.font = "bold 16px sans-serif";
+        labels.forEach((label, index) => {
+          const y = 55 + index * 42;
+          context.fillStyle = colors[index];
+          context.fillRect(315, y - 15, 20, 20);
+          context.fillStyle = "#000000";
+          context.fillText(
+            `${label} (${formatValue(values[index])})`,
+            345,
+            y + 2
+          );
+        });
+        return canvas;
+      };
+
+      const pieCanvas = drawPieChart(
+        [
+          summaryTotals.chartExecuted,
+          summaryTotals.chartPending,
+          summaryTotals.chartMissing,
+        ],
+        ["Ejecutado", "Pendiente", "Sin registro"],
+        ["#4CAF50", "#F44336", "#9E9E9E"]
+      );
+      
+      html += `<div style="text-align: center; margin-bottom: 40px;">`;
+      html += `<img src="${pieCanvas.toDataURL("image/png")}" width="520" />`;
+      html += `</div>`;
+      
+      html += `<h2 style="font-family: sans-serif; color: #34495e; border-bottom: 2px solid #34495e; padding-bottom: 5px;">Detallado</h2>`;
+      html += `<table style="border-collapse: collapse; width: 100%; font-family: sans-serif; font-size: 10pt; border: 1px solid #ddd;">`;
+      html += `<thead><tr style="background-color: #34495e; color: white;">`;
+      
+      detailedColumns.forEach(col => {
+        html += `<th style="border: 1px solid #ddd; padding: 10px; text-align: left;">${col}</th>`;
+      });
+      html += `</tr></thead><tbody>`;
+      
+      indicatorRows.forEach(row => {
+        html += `<tr>`;
+        html += `<td style="border: 1px solid #ddd; padding: 8px;">${toText(row.desafioNombre)}</td>`;
+        html += `<td style="border: 1px solid #ddd; padding: 8px;">${compactConvergenteLabel(row.convergenteNombre)}</td>`;
+        html += `<td style="border: 1px solid #ddd; padding: 8px;">${compactFacultadLabel(row.facultadNombre)}</td>`;
+        if (showDependencyColumn) {
+          html += `<td style="border: 1px solid #ddd; padding: 8px;">${toText(row.dependenciaNombre)}</td>`;
+        }
+        html += `<td style="border: 1px solid #ddd; padding: 8px;">${toText(row.nombre)}</td>`;
+        html += `<td style="border: 1px solid #ddd; padding: 8px;">${row.metaValue ?? "Sin registro"}</td>`;
+        html += `<td style="border: 1px solid #ddd; padding: 8px;">${row.avanceValue ?? "Sin registro"}</td>`;
+        
+        const bgColor = getHexColor(row.executionPercent);
+        html += `<td style="border: 1px solid #ddd; padding: 8px; background-color: ${bgColor}; font-weight: bold; color: ${bgColor === '#9e9e9e' ? 'white' : 'black'};">${row.executionPercent}</td>`;
+        html += `</tr>`;
+      });
+      
+      html += `</tbody></table>`;
+
+      const payload = {
+        title,
+        html,
+        shareWith: sessionUser?.correo,
+      };
+
+      const response = await api.post("/export-docs", payload);
+      
+      if (response.data && response.data.status && response.data.url) {
+        window.open(response.data.url, "_blank");
+      } else {
+        alert("Error al exportar a Google Docs: " + (response.data?.message || "Error desconocido"));
+      }
+    } catch (error) {
+      console.error("Error al exportar a Google Docs:", error);
+      alert("Error al exportar a Google Docs. Revisa la consola para más detalles.");
+    } finally {
+      setIsExportingDocs(false);
+    }
+  };
+
   return (
     <Box className="seguimientos-page">
       <Paper className="seguimientos-panel" elevation={1}>
@@ -1344,6 +1510,14 @@ function Consolidados({ data, userInfo }) {
           </Button>
           <Button variant="contained" onClick={exportToPdf}>
             Exportar a PDF
+          </Button>
+          <Button
+            variant="contained"
+            color="secondary"
+            onClick={exportToGoogleDocs}
+            disabled={isExportingDocs}
+          >
+            {isExportingDocs ? "Exportando..." : "Exportar a Docs"}
           </Button>
         </Box>
         <Box

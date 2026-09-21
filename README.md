@@ -174,7 +174,6 @@ SHEET_COLUMNS = {
 };
 ```
 
-
 ## Subir archivos a Drive
 
 ### Configuracion requerida
@@ -203,7 +202,7 @@ No establezcas manualmente el header `Content-Type` cuando uses `FormData`; el n
 
 HTTP `201 Created`:
 
-```json
+````json
 {
   "status": true,
   "message": "Archivo subido correctamente.",
@@ -224,10 +223,9 @@ HTTP `201 Created`:
   "status": false,
   "message": "Debes enviar un archivo en el campo \"file\"."
 }
-```
+````
 
 Tambien puede indicar que el `refresh_token` no existe, fue revocado o expiro. En ese caso se debe repetir la autorizacion OAuth y actualizar `USUARIOS.refresh_token`.
-
 
 ### Editar o eliminar un archivo
 
@@ -549,3 +547,52 @@ function CampoConAutoguardado({ id, valorInicial, onSave }) {
 ```
 
 Si quieres, en un siguiente paso puedo dejar el README aun mas afinado con ejemplos reales de payload para `INDICADORES_PRODUCTO`, `METAS` y `AVANCES`.
+
+---
+
+### POST /export-docs
+
+Exporta texto plano o JSON a un nuevo documento de Google Docs. Opcionalmente lo comparte con un correo específico para otorgar permisos de edición.
+
+**Método:** `POST`
+
+**URL:** `/export-docs` (Directamente en la raíz de la API)
+
+**Body (JSON):**
+
+```json
+{
+  "title": "Reporte de Planeación 2026",
+  "html": "<h1>Reporte 2026</h1><p style='color: blue;'>Este es un reporte con estilos básicos</p>",
+  "shareWith": "usuario@ejemplo.com"
+}
+```
+
+- `title` (Opcional): El título del documento (por defecto "Exportacion de planeacion").
+- `content`, `data` o `html` (Requerido al menos uno): El contenido a escribir.
+  - Usar `content` para texto plano.
+  - Usar `data` (objeto) para formatearlo automáticamente a JSON.
+  - Usar `html` para enviar código HTML. Google Drive interpretará las etiquetas (como `<h1>`, `<table>`, `<b>`) y los estilos CSS básicos (como `color` o `background-color`) y los convertirá en un Google Doc formateado.
+- `shareWith` (Opcional): Correo electrónico al cual darle permisos de escritura y enviar notificación.
+
+Para las gráficas en el frontend (ej. de Chart.js), puedes exportarlas a imagen Base64 (usando funciones nativas de la librería como toBase64Image()) e incrustarlas en tu HTML usando una etiqueta de imagen normal: <img src="data:image/png;base64,iVBORw0KGgo..." width="500">
+
+**Respuesta exitosa (201 Created):**
+
+```json
+{
+  "status": true,
+  "message": "Google Docs creado correctamente.",
+  "documentId": "1aBcDeFgHiJk...",
+  "url": "https://docs.google.com/document/d/1aBcDeFgHiJk.../edit"
+}
+```
+
+**Respuesta de error (400 Bad Request):**
+
+```json
+{
+  "status": false,
+  "message": "Debes enviar content o data para crear el documento."
+}
+```
