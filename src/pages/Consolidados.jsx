@@ -836,14 +836,14 @@ function Consolidados({ data, userInfo }) {
     () => [
       dimensionLabel,
       "Estrategia convergente",
-      "Estrategia facultad",
+      ...(groupingMode !== "eje" ? ["Estrategia facultad"] : []),
       ...(showDependencyColumn ? ["Dependencia"] : []),
       "Indicador",
       "Meta planeada",
       "Meta ejecutada",
       "% ejecutado",
     ],
-    [showDependencyColumn, dimensionLabel],
+    [showDependencyColumn, dimensionLabel, groupingMode],
   );
 
   const summaryTotals = useMemo(() => {
@@ -1232,7 +1232,7 @@ function Consolidados({ data, userInfo }) {
       indicatorRows.map((row) => [
         toText(row.desafioNombre),
         toText(row.convergenteNombre),
-        toText(row.facultadNombre),
+        ...(groupingMode !== "eje" ? [toText(row.facultadNombre)] : []),
         ...(showDependencyColumn ? [toText(row.dependenciaNombre)] : []),
         toText(row.nombre),
         row.metaValue ?? "Sin registro",
@@ -1292,43 +1292,43 @@ function Consolidados({ data, userInfo }) {
       const title = `Consolidados ${selectedYear} ${dateStr} ${timeStr}`;
 
       let html = `<h1 style="text-align: center; font-family: sans-serif; color: #2c3e50;">${title}</h1>`;
-      
+
       html += `<h2 style="font-family: sans-serif; color: #34495e; border-bottom: 2px solid #34495e; padding-bottom: 5px;">Resumen</h2>`;
       html += `<table style="border-collapse: collapse; width: 100%; font-family: sans-serif; margin-bottom: 30px; border: 1px solid #ddd;">`;
       html += `<thead><tr style="background-color: #34495e; color: white;">`;
       html += `<th style="border: 1px solid #ddd; padding: 10px; text-align: left;">Concepto</th>`;
       html += `<th style="border: 1px solid #ddd; padding: 10px; text-align: left;">Cantidad</th>`;
       html += `</tr></thead><tbody>`;
-      
+
       html += `<tr>`;
       html += `<td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Total indicadores</td>`;
       html += `<td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">${totalSummaryIndicators}</td>`;
       html += `</tr>`;
-      
-      statsByDesafio.forEach(row => {
+
+      statsByDesafio.forEach((row) => {
         html += `<tr>`;
         html += `<td style="border: 1px solid #ddd; padding: 8px;">${row.desafioNombre}</td>`;
         html += `<td style="border: 1px solid #ddd; padding: 8px;">${row.numIndicadores}</td>`;
         html += `</tr>`;
       });
-      
+
       html += `<tr>`;
       html += `<td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Indicadores ejecutados</td>`;
       html += `<td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">${summaryTotals.executedIndicators}</td>`;
       html += `</tr>`;
-      
+
       html += `<tr>`;
       html += `<td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Porcentaje de cumplimiento</td>`;
       html += `<td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">${summaryTotals.percentage.toFixed(1)}%</td>`;
       html += `</tr>`;
-      
+
       html += `</tbody></table>`;
 
       const drawPieChart = (
         values,
         labels,
         colors,
-        formatValue = (value) => `${value.toFixed(1)}%`
+        formatValue = (value) => `${value.toFixed(1)}%`,
       ) => {
         const canvas = document.createElement("canvas");
         canvas.width = 520;
@@ -1366,7 +1366,7 @@ function Consolidados({ data, userInfo }) {
           context.fillText(
             `${label} (${formatValue(values[index])})`,
             345,
-            y + 2
+            y + 2,
           );
         });
         return canvas;
@@ -1379,39 +1379,41 @@ function Consolidados({ data, userInfo }) {
           summaryTotals.chartMissing,
         ],
         ["Ejecutado", "Pendiente", "Sin registro"],
-        ["#4CAF50", "#F44336", "#9E9E9E"]
+        ["#4CAF50", "#F44336", "#9E9E9E"],
       );
-      
+
       html += `<div style="text-align: center; margin-bottom: 40px;">`;
       html += `<img src="${pieCanvas.toDataURL("image/png")}" width="520" />`;
       html += `</div>`;
-      
+
       html += `<h2 style="font-family: sans-serif; color: #34495e; border-bottom: 2px solid #34495e; padding-bottom: 5px;">Detallado</h2>`;
       html += `<table style="border-collapse: collapse; width: 100%; font-family: sans-serif; font-size: 10pt; border: 1px solid #ddd;">`;
       html += `<thead><tr style="background-color: #34495e; color: white;">`;
-      
-      detailedColumns.forEach(col => {
+
+      detailedColumns.forEach((col) => {
         html += `<th style="border: 1px solid #ddd; padding: 10px; text-align: left;">${col}</th>`;
       });
       html += `</tr></thead><tbody>`;
-      
-      indicatorRows.forEach(row => {
+
+      indicatorRows.forEach((row) => {
         html += `<tr>`;
         html += `<td style="border: 1px solid #ddd; padding: 8px;">${toText(row.desafioNombre)}</td>`;
         html += `<td style="border: 1px solid #ddd; padding: 8px;">${compactConvergenteLabel(row.convergenteNombre)}</td>`;
-        html += `<td style="border: 1px solid #ddd; padding: 8px;">${compactFacultadLabel(row.facultadNombre)}</td>`;
+        if (groupingMode !== "eje") {
+          html += `<td style="border: 1px solid #ddd; padding: 8px;">${compactFacultadLabel(row.facultadNombre)}</td>`;
+        }
         if (showDependencyColumn) {
           html += `<td style="border: 1px solid #ddd; padding: 8px;">${toText(row.dependenciaNombre)}</td>`;
         }
         html += `<td style="border: 1px solid #ddd; padding: 8px;">${toText(row.nombre)}</td>`;
         html += `<td style="border: 1px solid #ddd; padding: 8px;">${row.metaValue ?? "Sin registro"}</td>`;
         html += `<td style="border: 1px solid #ddd; padding: 8px;">${row.avanceValue ?? "Sin registro"}</td>`;
-        
+
         const bgColor = getHexColor(row.executionPercent);
-        html += `<td style="border: 1px solid #ddd; padding: 8px; background-color: ${bgColor}; font-weight: bold; color: ${bgColor === '#9e9e9e' ? 'white' : 'black'};">${row.executionPercent}</td>`;
+        html += `<td style="border: 1px solid #ddd; padding: 8px; background-color: ${bgColor}; font-weight: bold; color: ${bgColor === "#9e9e9e" ? "white" : "black"};">${row.executionPercent}</td>`;
         html += `</tr>`;
       });
-      
+
       html += `</tbody></table>`;
 
       const payload = {
@@ -1421,15 +1423,20 @@ function Consolidados({ data, userInfo }) {
       };
 
       const response = await api.post("/export-docs", payload);
-      
+
       if (response.data && response.data.status && response.data.url) {
         window.open(response.data.url, "_blank");
       } else {
-        alert("Error al exportar a Google Docs: " + (response.data?.message || "Error desconocido"));
+        alert(
+          "Error al exportar a Google Docs: " +
+            (response.data?.message || "Error desconocido"),
+        );
       }
     } catch (error) {
       console.error("Error al exportar a Google Docs:", error);
-      alert("Error al exportar a Google Docs. Revisa la consola para más detalles.");
+      alert(
+        "Error al exportar a Google Docs. Revisa la consola para más detalles.",
+      );
     } finally {
       setIsExportingDocs(false);
     }
@@ -1911,9 +1918,11 @@ function Consolidados({ data, userInfo }) {
                   ) : (
                     ""
                   )}
-                  <TableCell sx={{ fontWeight: 800 }}>
-                    Estrategia Facultad
-                  </TableCell>
+                  {groupingMode !== "eje" && (
+                    <TableCell sx={{ fontWeight: 800 }}>
+                      Estrategia Facultad
+                    </TableCell>
+                  )}
                   {showDependencyColumn && (
                     <TableCell sx={{ fontWeight: 800 }}>Dependencia</TableCell>
                   )}
@@ -1928,11 +1937,11 @@ function Consolidados({ data, userInfo }) {
                 </TableRow>
                 {indicatorRows.map((row) => (
                   <TableRow key={row.id}>
-                    <TableCell>
+                    <TableCell sx={{ whiteSpace: "nowrap" }}>
                       <Tooltip title={toText(row.desafioNombre)}>
                         <span>
                           {groupingMode === "eje"
-                            ? `Eje ${row.id_desafio}`
+                            ? toText(row.desafioNombre)
                             : compactDesafioLabel(
                                 row.desafioNombre,
                                 row.id_desafio,
@@ -1951,11 +1960,13 @@ function Consolidados({ data, userInfo }) {
                     ) : (
                       ""
                     )}
-                    <TableCell>
-                      <Tooltip title={toText(row.facultadNombre)}>
-                        <span>{compactFacultadLabel(row.facultadNombre)}</span>
-                      </Tooltip>
-                    </TableCell>
+                    {groupingMode !== "eje" && (
+                      <TableCell>
+                        <Tooltip title={toText(row.facultadNombre)}>
+                          <span>{compactFacultadLabel(row.facultadNombre)}</span>
+                        </Tooltip>
+                      </TableCell>
+                    )}
                     {showDependencyColumn && (
                       <TableCell>{toText(row.dependenciaNombre)}</TableCell>
                     )}
