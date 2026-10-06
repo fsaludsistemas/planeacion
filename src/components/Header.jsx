@@ -99,7 +99,7 @@ const ActionContainer = styled("div")(({ theme }) => ({
   },
 }));
 
-const Header = ({ userInfo, onLogout }) => {
+const Header = ({ userInfo, dependencyName, onLogout }) => {
   return (
     <HeaderContainer role="navegación" aria-label="Navegación Principal">
       <Logo>
@@ -112,9 +112,9 @@ const Header = ({ userInfo, onLogout }) => {
         </Link>
       </Logo>
       <TitleContainer>
-        <Title>Planeación</Title>
+        <Title>Sistema de Planeación</Title>
         {userInfo && (
-          <Subtitle>{`${userInfo.name} - ${userInfo.rol}`}</Subtitle>
+          <Subtitle>{`${userInfo.name} - ${dependencyName || "Sin dependencia"} - Rol: ${userInfo.rol}`}</Subtitle>
         )}
         <LastUpdate>Última actualización: {lastUpdateDate}</LastUpdate>
       </TitleContainer>

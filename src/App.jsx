@@ -44,6 +44,12 @@ const App = () => {
     userRole === "sistemas" ||
     userRole === "calidad" ||
     String(userInfo?.id || "") === "0";
+  const dependencyName = useMemo(() => {
+    const dependencies = appData?.DEPENDENCIA || appData?.DEPENDENCIAS || [];
+    return dependencies.find(
+      (item) => String(item.id) === String(userInfo?.id_dependencia),
+    )?.nombre || "Sin dependencia";
+  }, [appData, userInfo]);
 
   useEffect(() => {
     const token = Cookies.get("token");
@@ -180,7 +186,7 @@ const App = () => {
     <>
       {isLogged ? (
         <div>
-          <Header userInfo={userInfo} onLogout={handleLogout} />
+          <Header userInfo={userInfo} dependencyName={dependencyName} onLogout={handleLogout} />
           <Container className="mt-5">
             <Box>
               <Tabs
@@ -189,7 +195,7 @@ const App = () => {
                 aria-label="Gestión de Indicadores Tabs"
               >
                 <Tab
-                  label="Indicadores"
+                  label="MDE"
                   sx={{ fontSize: "1rem", fontWeight: "bold" }}
                 />
                 {canManageUsers && (
@@ -199,7 +205,7 @@ const App = () => {
                   />
                 )}
                 <Tab
-                  label="Consolidado Ind."
+                  label="Seguimientos"
                   sx={{ fontSize: "1rem", fontWeight: "bold" }}
                 />
                 <Tab
