@@ -67,7 +67,7 @@ const formatExecutionPercent = (plannedValue, executedValue) => {
   if (planned === null || executed === null || planned === 0)
     return "Sin registro";
   let percent = (executed / planned) * 100;
-  if (percent > 100) percent = 100;
+  percent = Math.min(100, Math.max(0, percent));
   return `${percent.toFixed(1).replace(".", ",")}%`;
 };
 

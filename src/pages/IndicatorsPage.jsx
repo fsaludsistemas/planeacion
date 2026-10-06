@@ -138,7 +138,7 @@ const parseNumericValue = (value) => {
 
 const formatPercentage = (value) => {
   if (!Number.isFinite(value)) return "-";
-  const rounded = Math.round(value * 100) / 100;
+  const rounded = Math.min(100, Math.max(0, Math.round(value * 100) / 100));
   return `${Number.isInteger(rounded) ? rounded : rounded.toFixed(2)}%`;
 };
 
@@ -158,6 +158,17 @@ const getAvanceDisplay = (avanceValue, metaValue) => {
 };
 
 const LAST_EXPANDED_INDICATOR_KEY = "indicators.lastExpandedId";
+const FILTERS_STORAGE_KEY = "indicators.filters";
+const INITIAL_FILTERS = {
+  dependencia: "",
+  tipoDependencia: "TODAS",
+  respondeA: "",
+  desafio: "",
+  estrategiaConvergente: "",
+  estrategiaFacultad: "",
+  programaInstitucional: "",
+  indicadorResultado: "",
+};
 
 const IndicatorQuickEditFields = React.memo(
   ({
@@ -312,15 +323,13 @@ const IndicatorQuickEditFields = React.memo(
 );
 
 const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
-  const [filters, setFilters] = useState({
-    dependencia: "",
-    tipoDependencia: "TODAS",
-    respondeA: "",
-    desafio: "",
-    estrategiaConvergente: "",
-    estrategiaFacultad: "",
-    programaInstitucional: "",
-    indicadorResultado: "",
+  const [filters, setFilters] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem(FILTERS_STORAGE_KEY);
+      return stored ? { ...INITIAL_FILTERS, ...JSON.parse(stored) } : INITIAL_FILTERS;
+    } catch {
+      return INITIAL_FILTERS;
+    }
   });
   const [createOpen, setCreateOpen] = useState(false);
   const [editState, setEditState] = useState({ open: false, indicator: null });
@@ -338,6 +347,10 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
   });
   const hasHydratedExpandedIdRef = useRef(false);
   const scrollTimerRef = useRef(null);
+
+  useEffect(() => {
+    sessionStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filters));
+  }, [filters]);
 
   useEffect(() => {
     if (expandedId) {
@@ -429,7 +442,7 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
         `[data-indicator-id="${expandedId}"]`,
       );
       if (element) {
-        element.scrollIntoView({ behavior: "smooth", block: "start" });
+        element.scrollIntoView({ behavior: "smooth", block: "center" });
       }
     }, 100);
     return () => {

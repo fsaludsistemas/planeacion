@@ -53,7 +53,7 @@ const formatExecutionPercent = (plannedValue, executedValue) => {
   if (planned === null || executed === null || planned === 0)
     return "Sin registro";
   let percent = (executed / planned) * 100;
-  if (percent > 100) percent = 100;
+  percent = Math.min(100, Math.max(0, percent));
   return `${percent.toFixed(1).replace(".", ",")}%`;
 };
 
@@ -1247,16 +1247,12 @@ function Consolidados({ data, userInfo }) {
       [
         dimensionLabel,
         "N.º indicadores",
-        "Meta planeada",
-        "Meta ejecutada",
         "% ejecutado",
         "Pendiente",
       ],
       statsByDesafio.map((row) => [
         row.desafioNombre,
         row.numIndicadores,
-        row.metaPlaneada,
-        row.metaEjecutada,
         row.metaEjecutadaStr,
         row.pendienteStr,
       ]),
@@ -1448,7 +1444,7 @@ function Consolidados({ data, userInfo }) {
         <Box className="seguimientos-header">
           <Box>
             <Typography variant="h5" sx={{ fontWeight: 800 }}>
-              Consolidados
+              Seguimientos
             </Typography>
             <Typography variant="body2" sx={{ color: "text.secondary" }}>
               {totalSummaryIndicators} indicadores
@@ -1963,7 +1959,9 @@ function Consolidados({ data, userInfo }) {
                     {groupingMode !== "eje" && (
                       <TableCell>
                         <Tooltip title={toText(row.facultadNombre)}>
-                          <span>{compactFacultadLabel(row.facultadNombre)}</span>
+                          <span>
+                            {compactFacultadLabel(row.facultadNombre)}
+                          </span>
                         </Tooltip>
                       </TableCell>
                     )}
@@ -2048,24 +2046,6 @@ function Consolidados({ data, userInfo }) {
                       textAlign: "right",
                     }}
                   >
-                    Meta Planeada
-                  </TableCell>
-                  <TableCell
-                    sx={{
-                      color: "white",
-                      fontWeight: "bold",
-                      textAlign: "right",
-                    }}
-                  >
-                    Meta Ejecutada
-                  </TableCell>
-                  <TableCell
-                    sx={{
-                      color: "white",
-                      fontWeight: "bold",
-                      textAlign: "right",
-                    }}
-                  >
                     Porcentaje ejecutado
                   </TableCell>
                   <TableCell
@@ -2082,7 +2062,7 @@ function Consolidados({ data, userInfo }) {
               <TableBody>
                 {statsByDesafio.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
+                    <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
                       No hay datos para mostrar en este año.
                     </TableCell>
                   </TableRow>
@@ -2093,8 +2073,6 @@ function Consolidados({ data, userInfo }) {
                         {toText(row.desafioNombre)}
                       </TableCell>
                       <TableCell align="right">{row.numIndicadores}</TableCell>
-                      <TableCell align="right">{row.metaPlaneada}</TableCell>
-                      <TableCell align="right">{row.metaEjecutada}</TableCell>
                       <TableCell align="right">
                         <Box
                           sx={{
