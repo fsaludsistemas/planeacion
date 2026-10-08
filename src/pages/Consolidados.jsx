@@ -170,6 +170,11 @@ function Consolidados({ data, userInfo }) {
     () => sortById(getSheet(data, "INDICADORES_PRODUCTO")),
     [data],
   );
+  const ejesCatalog = useMemo(() => sortById(getSheet(data, "EJES")), [data]);
+  const ejeById = useMemo(
+    () => new Map(ejesCatalog.map((item) => [String(item.id).trim(), item])),
+    [ejesCatalog],
+  );
   const ejes = useMemo(() => {
     const values = new Set(
       indicators
@@ -392,7 +397,7 @@ function Consolidados({ data, userInfo }) {
         id_desafio: group.dimensionId,
         desafioNombre:
           groupingMode === "eje"
-            ? `Eje ${group.dimensionId}`
+            ? ejeById.get(String(group.dimensionId))?.nombre || `Eje ${group.dimensionId}`
             : group.desafio.titulo || `Desafío ${group.desafio.id}`,
         numIndicadores: group.indicators.length,
         metaPlaneada: sumPlanned,
@@ -413,8 +418,9 @@ function Consolidados({ data, userInfo }) {
     desafioById,
     metaByIndicatorId,
     avanceByIndicatorId,
-    selectedYear,
-    groupingMode,
+      selectedYear,
+      groupingMode,
+      ejeById,
   ]);
 
   const totalSummaryIndicators = statsByDesafio.reduce(
@@ -504,7 +510,7 @@ function Consolidados({ data, userInfo }) {
         id_dependencia: group.id_dependencia,
         desafioNombre:
           groupingMode === "eje"
-            ? `Eje ${group.id_desafio}`
+            ? ejeById.get(String(group.id_desafio))?.nombre || `Eje ${group.id_desafio}`
             : `Desafío ${group.id_desafio}`,
         escuelaNombre:
           group.dependencia.nombre || `Escuela ${group.id_dependencia}`,
@@ -546,6 +552,7 @@ function Consolidados({ data, userInfo }) {
     avanceByIndicatorId,
     selectedYear,
     groupingMode,
+    ejeById,
   ]);
 
   // Extract active dependencias
@@ -794,7 +801,7 @@ function Consolidados({ data, userInfo }) {
         ...indicator,
         desafioNombre:
           groupingMode === "eje"
-            ? `Eje ${String(indicator.eje ?? "").trim()}`
+            ? ejeById.get(String(indicator.eje ?? "").trim())?.nombre || `Eje ${String(indicator.eje ?? "").trim()}`
             : desafioById.get(String(indicator.id_desafio))?.titulo,
         dependencyCounts: {
           [toText(
@@ -830,6 +837,7 @@ function Consolidados({ data, userInfo }) {
     dependenciaById,
     convergentes,
     facultades,
+    ejeById,
   ]);
 
   const detailedColumns = useMemo(
@@ -1560,7 +1568,7 @@ function Consolidados({ data, userInfo }) {
               <MenuItem value="">Todos</MenuItem>
               {ejes.map((eje) => (
                 <MenuItem key={eje} value={eje}>
-                  Eje {eje}
+                  {ejeById.get(String(eje))?.nombre || `Eje ${eje}`}
                 </MenuItem>
               ))}
             </Select>
