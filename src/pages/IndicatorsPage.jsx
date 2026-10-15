@@ -326,7 +326,9 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
   const [filters, setFilters] = useState(() => {
     try {
       const stored = sessionStorage.getItem(FILTERS_STORAGE_KEY);
-      return stored ? { ...INITIAL_FILTERS, ...JSON.parse(stored) } : INITIAL_FILTERS;
+      return stored
+        ? { ...INITIAL_FILTERS, ...JSON.parse(stored) }
+        : INITIAL_FILTERS;
     } catch {
       return INITIAL_FILTERS;
     }
@@ -502,6 +504,14 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
     userRole === "administrador" ||
     userRole === "calidad";
   const isRegularUser = userRole === "usuario";
+  useEffect(() => {
+    if (!userDependencyId || isAdminOrSystems) return;
+    setFilters((currentFilters) =>
+      currentFilters.dependencia === userDependencyId
+        ? currentFilters
+        : { ...currentFilters, dependencia: userDependencyId },
+    );
+  }, [userDependencyId, isAdminOrSystems]);
   const currentUserRecord = useMemo(
     () =>
       userById.get(String(sessionUser?.id || "")) ||

@@ -1,5 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Box, Container, Tab, Tabs, Typography } from "@mui/material";
+import {
+  Alert,
+  Box,
+  Container,
+  Paper,
+  Tab,
+  Tabs,
+  Typography,
+} from "@mui/material";
 import Cookies from "js-cookie";
 import Header from "./components/Header";
 import LoadingIndicator from "./components/LoadingIndicator";
@@ -46,9 +54,11 @@ const App = () => {
     String(userInfo?.id || "") === "0";
   const dependencyName = useMemo(() => {
     const dependencies = appData?.DEPENDENCIA || appData?.DEPENDENCIAS || [];
-    return dependencies.find(
-      (item) => String(item.id) === String(userInfo?.id_dependencia),
-    )?.nombre || "Sin dependencia";
+    return (
+      dependencies.find(
+        (item) => String(item.id) === String(userInfo?.id_dependencia),
+      )?.nombre || "Sin dependencia"
+    );
   }, [appData, userInfo]);
 
   useEffect(() => {
@@ -186,8 +196,48 @@ const App = () => {
     <>
       {isLogged ? (
         <div>
-          <Header userInfo={userInfo} dependencyName={dependencyName} onLogout={handleLogout} />
+          <Header
+            userInfo={userInfo}
+            dependencyName={dependencyName}
+            onLogout={handleLogout}
+          />
           <Container className="mt-5">
+            <Paper
+              elevation={0}
+              sx={{
+                mb: 2,
+                p: { xs: 2, sm: 2.5 },
+                border: "1px solid #cfe0e8",
+                borderLeft: "5px solid #1976d2",
+                borderRadius: 3,
+                background: "linear-gradient(135deg, #f5fbff 0%, #eef6f8 100%)",
+              }}
+            >
+              <Typography
+                variant="h4"
+                sx={{ color: "#164e63", fontWeight: 700, mb: 0.5 }}
+              >
+                Bienvenido al Sistema de Planeación y Seguimiento Estratégico
+              </Typography>
+              <Typography sx={{ color: "#1976d2", fontWeight: 600, mb: 1 }}>
+                Facultad de Salud - {dependencyName}
+              </Typography>
+              <Typography sx={{ color: "#374151", mt: 1, maxWidth: 820 }}>
+                Aquí encontrarás los indicadores, metas y avances de los
+                proyectos que hacen posible nuestro direccionamiento
+                estratégico.
+              </Typography>
+              <Typography
+                sx={{
+                  color: "#164e63",
+                  fontStyle: "italic",
+                  fontWeight: 600,
+                  mt: 1,
+                }}
+              >
+                Planear hoy para construir la Facultad de Salud que soñamos.
+              </Typography>
+            </Paper>
             <Box>
               <Tabs
                 value={currentTab}
