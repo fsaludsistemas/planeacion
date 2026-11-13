@@ -859,6 +859,8 @@ function Consolidados({ data, userInfo }) {
     let executed = 0;
     let valid = 0;
     let executedIndicators = 0;
+    let sumPercentages = 0;
+
     indicatorRows.forEach((row) => {
       const rowPlanned = parseSheetNumber(row.metaValue);
       const rowExecuted = parseSheetNumber(row.avanceValue);
@@ -870,11 +872,22 @@ function Consolidados({ data, userInfo }) {
       if (rowExecuted !== null && rowExecuted > 0) {
         executedIndicators += 1;
       }
+
+      const percentNum = parseSheetNumber(row.executionPercent);
+      if (typeof percentNum === "number") {
+        sumPercentages += percentNum;
+      } else {
+        // Los "Sin registro" cuentan como 0%
+        sumPercentages += 0;
+      }
     });
-    const percentage = planned ? Math.min((executed / planned) * 100, 100) : 0;
+
     const total = indicatorRows.length;
+    // Promedio de avance general donde los "Sin registro" cuentan como 0%
+    const percentage = total ? sumPercentages / total : 0;
     const missing = total ? ((total - valid) / total) * 100 : 0;
-    const validWeight = total ? valid / total : 0;
+    const chartPending = Math.max(0, 100 - percentage - missing);
+
     return {
       planned,
       executed,
@@ -882,8 +895,8 @@ function Consolidados({ data, userInfo }) {
       pending: Math.max(0, 100 - percentage),
       valid,
       executedIndicators,
-      chartExecuted: percentage * validWeight,
-      chartPending: Math.max(0, 100 - percentage) * validWeight,
+      chartExecuted: percentage,
+      chartPending: chartPending,
       chartMissing: missing,
     };
   }, [indicatorRows]);
