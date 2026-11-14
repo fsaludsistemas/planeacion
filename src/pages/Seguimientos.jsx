@@ -603,8 +603,9 @@ const Seguimientos = ({ data, userInfo }) => {
       );
     }, 0);
 
-    const promedio = totalIndicadoresValidos
-      ? executed / totalIndicadoresValidos
+    // Al contar los "Sin registro" como 0%, el promedio se calcula sobre el total general de indicadores
+    const promedio = totalIndicadoresGeneral
+      ? executed / totalIndicadoresGeneral
       : 0;
     const pendingPorcentaje = Math.max(0, 100 - promedio);
 
@@ -612,21 +613,17 @@ const Seguimientos = ({ data, userInfo }) => {
     const sinRegistro = totalIndicadoresGeneral
       ? (sinRegistroCount / totalIndicadoresGeneral) * 100
       : 0;
-    const pesoValidos = totalIndicadoresGeneral
-      ? totalIndicadoresValidos / totalIndicadoresGeneral
-      : 0;
+    const pendientePie = Math.max(0, 100 - promedio - sinRegistro);
 
     return {
       promedio,
       pending: pendingPorcentaje,
       numEjecutados: totalEjecutados,
       totalIndicadores: totalIndicadoresGeneral,
-      porcentajeCumplimiento: totalIndicadoresGeneral
-        ? (totalEjecutados / totalIndicadoresGeneral) * 100
-        : 0,
+      porcentajeCumplimiento: promedio,
       chartData: {
-        ejecutado: promedio * pesoValidos,
-        pendiente: pendingPorcentaje * pesoValidos,
+        ejecutado: promedio,
+        pendiente: pendientePie,
         sinRegistro: sinRegistro,
       },
     };
