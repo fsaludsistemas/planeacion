@@ -81,6 +81,87 @@ const App = () => {
     }
   }, []);
 
+  const syncCurrentUser = useCallback((dataset, currentUser) => {
+    if (!dataset || !currentUser) return currentUser;
+
+    const users = Array.isArray(dataset?.USUARIOS)
+      ? dataset.USUARIOS
+      : Array.isArray(dataset?.USUARIO)
+      ? dataset.USUARIO
+      : [];
+
+    const userEmail = (currentUser?.correo || "").trim().toLowerCase();
+    const userId = String(currentUser?.id || "").trim();
+
+    const matchedUser = users.find((item) => {
+      const emailMatches =
+        userEmail && (item.correo || "").trim().toLowerCase() === userEmail;
+      const idMatches = userId && String(item.id || "").trim() === userId;
+      return emailMatches || idMatches;
+    });
+
+    if (!matchedUser) {
+      console.warn("Usuario no encontrado en la lista de usuarios autorizados.");
+      return null;
+    }
+
+    const updatedUser = {
+      ...currentUser,
+      id: String(matchedUser.id ?? currentUser.id ?? ""),
+      correo: matchedUser.correo || currentUser.correo,
+      rol: matchedUser.rol || currentUser.rol || "Usuario",
+      id_dependencia: String(matchedUser.id_dependencia ?? ""),
+      editor:
+        matchedUser.editor === true ||
+        String(matchedUser.editor).toLowerCase() === "true",
+      name:
+        currentUser.name ||
+        (matchedUser.correo ? matchedUser.correo.split("@")[0] : "Usuario"),
+    };
+
+    if (String(currentUser.id_dependencia) !== String(updatedUser.id_dependencia)) {
+      sessionStorage.removeItem("indicators.filters");
+      sessionStorage.removeItem("indicators.lastExpandedId");
+    }
+
+    sessionStorage.setItem("loggedUser", JSON.stringify(updatedUser));
+    return updatedUser;
+  }, []);
+
+  const applyDatasetAndSyncUser = useCallback(
+    (dataset) => {
+      setAppData(dataset);
+
+      setUserInfo((prevUser) => {
+        let baseUser = prevUser;
+        if (!baseUser) {
+          try {
+            const stored = sessionStorage.getItem("loggedUser");
+            if (stored) baseUser = JSON.parse(stored);
+          } catch {
+            baseUser = null;
+          }
+        }
+
+        if (!baseUser) return null;
+
+        const updated = syncCurrentUser(dataset, baseUser);
+        if (!updated) {
+          Cookies.remove("token");
+          sessionStorage.removeItem("loggedUser");
+          sessionStorage.removeItem("indicators.filters");
+          sessionStorage.removeItem("indicators.lastExpandedId");
+          setIsLogged(false);
+          setDataError("Tu cuenta ya no está habilitada para ingresar.");
+          return null;
+        }
+
+        return updated;
+      });
+    },
+    [syncCurrentUser],
+  );
+
   useEffect(() => {
     const fetchAllData = async () => {
       if (!isLogged || appData) {
@@ -98,7 +179,7 @@ const App = () => {
           throw new Error("No se obtuvo un dataset válido.");
         }
 
-        setAppData(dataset);
+        applyDatasetAndSyncUser(dataset);
       } catch (error) {
         console.error("Error cargando dataset principal:", error);
         setDataError("No se pudo cargar la información de la aplicación.");
@@ -108,7 +189,7 @@ const App = () => {
     };
 
     fetchAllData();
-  }, [isLogged, appData]);
+  }, [isLogged, appData, applyDatasetAndSyncUser]);
 
   const refreshAppData = useCallback(async () => {
     setIsDataLoading(true);
@@ -122,14 +203,14 @@ const App = () => {
         throw new Error("No se obtuvo un dataset válido.");
       }
 
-      setAppData(dataset);
+      applyDatasetAndSyncUser(dataset);
     } catch (error) {
       console.error("Error actualizando dataset principal:", error);
       setDataError("No se pudo actualizar la información de la aplicación.");
     } finally {
       setIsDataLoading(false);
     }
-  }, []);
+  }, [applyDatasetAndSyncUser]);
 
   const handleChange = (event, newValue) => {
     setIsLoading(true);
@@ -170,7 +251,13 @@ const App = () => {
     }
 
     if (canManageUsers && currentTab === 1) {
-      return <Usuarios data={appData} userInfo={userInfo} />;
+      return (
+        <Usuarios
+          data={appData}
+          userInfo={userInfo}
+          onRefreshData={refreshAppData}
+        />
+      );
     }
 
     const consolidationTab = canManageUsers ? 2 : 1;

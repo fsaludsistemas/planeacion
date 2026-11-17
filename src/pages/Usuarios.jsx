@@ -69,7 +69,7 @@ const isPrivilegedRole = (role) => {
   );
 };
 
-function Usuarios({ data, userInfo }) {
+function Usuarios({ data, userInfo, onRefreshData }) {
   const [users, setUsers] = useState([]);
   const [dependencies, setDependencies] = useState([]);
   const [open, setOpen] = useState(false);
@@ -320,6 +320,9 @@ function Usuarios({ data, userInfo }) {
       );
       setSuccess("Usuario actualizado correctamente.");
       closeEditDialog();
+      if (typeof onRefreshData === "function") {
+        await onRefreshData();
+      }
     } catch (err) {
       setError(
         err?.response?.data?.message ||
