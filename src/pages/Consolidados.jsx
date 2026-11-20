@@ -102,16 +102,37 @@ const isPrivilegedRole = (role) => {
 
 const percentageClass = (value) => {
   const number = parseSheetNumber(value);
-  if (number >= 90) return "lightgreen";
+  if (number > 90) return "lightgreen";
   if (number >= 50) return "lightblue";
   if (number >= 30) return "yellow";
   if (number >= 0) return "salmon";
   return "transparent";
 };
 
+const getColorCategory = (value) => {
+  const number = parseSheetNumber(value);
+  if (number === null || value === "Sin registro") {
+    return "sinRegistro";
+  } else if (number > 90) {
+    return "superior";
+  } else if (number >= 50) {
+    return "alto";
+  } else if (number >= 30) {
+    return "medio";
+  } else {
+    return "bajo";
+  }
+};
+
 const compactDesafioLabel = (name, id) => {
   const match = String(name ?? "").match(/^Desaf[ií]o\s+\d+/i);
   return match?.[0] || `Desafío ${id}`;
+};
+
+const compactEjeLabel = (name, id) => {
+  const clean = String(name ?? "").trim();
+  const match = clean.match(/^Eje\s+\d+/i);
+  return match?.[0] || (id ? `Eje ${id}` : clean);
 };
 
 const compactConvergenteLabel = (name) => {
@@ -141,7 +162,7 @@ function Consolidados({ data, userInfo }) {
   const [selectedTipoDependencia, setSelectedTipoDependencia] = useState("");
   const [selectedDesafio, setSelectedDesafio] = useState("");
   const [selectedEje, setSelectedEje] = useState("");
-  const [groupingMode, setGroupingMode] = useState("desafio");
+  const [groupingMode, setGroupingMode] = useState("eje");
   const [selectedRespondeA, setSelectedRespondeA] = useState("");
   const [selectedConvergente, setSelectedConvergente] = useState("");
   const [selectedFacultad, setSelectedFacultad] = useState("");
@@ -150,6 +171,7 @@ function Consolidados({ data, userInfo }) {
   const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
   const [showDependencyColumn, setShowDependencyColumn] = useState(false);
   const [isExportingDocs, setIsExportingDocs] = useState(false);
+  const [selectedColorRange, setSelectedColorRange] = useState(null);
 
   const sessionUser = useMemo(() => {
     if (userInfo) return userInfo;
@@ -843,7 +865,7 @@ function Consolidados({ data, userInfo }) {
   const detailedColumns = useMemo(
     () => [
       dimensionLabel,
-      "Estrategia convergente",
+      ...(groupingMode !== "eje" ? ["Estrategia convergente"] : []),
       ...(groupingMode !== "eje" ? ["Estrategia facultad"] : []),
       ...(showDependencyColumn ? ["Dependencia"] : []),
       "Indicador",
@@ -858,7 +880,7 @@ function Consolidados({ data, userInfo }) {
     let planned = 0;
     let executed = 0;
     let valid = 0;
-    let executedIndicators = 0;
+    let startedIndicators = 0;
     let sumPercentages = 0;
 
     indicatorRows.forEach((row) => {
@@ -869,8 +891,15 @@ function Consolidados({ data, userInfo }) {
         executed += rowExecuted;
         valid += 1;
       }
-      if (rowExecuted !== null && rowExecuted > 0) {
-        executedIndicators += 1;
+
+      // Indicadores iniciados: avance distinto de 0 y no "Sin registro"
+      if (
+        rowExecuted !== null &&
+        typeof rowExecuted === "number" &&
+        rowExecuted > 0 &&
+        row.avanceValue !== "Sin registro"
+      ) {
+        startedIndicators += 1;
       }
 
       const percentNum = parseSheetNumber(row.executionPercent);
@@ -894,7 +923,9 @@ function Consolidados({ data, userInfo }) {
       percentage,
       pending: Math.max(0, 100 - percentage),
       valid,
-      executedIndicators,
+      totalIndicators: total,
+      startedIndicators,
+      executedIndicators: startedIndicators,
       chartExecuted: percentage,
       chartPending: chartPending,
       chartMissing: missing,
@@ -908,7 +939,7 @@ function Consolidados({ data, userInfo }) {
           const value = parseSheetNumber(row.executionPercent);
           if (value === null || row.executionPercent === "Sin registro") {
             counts.sinRegistro += 1;
-          } else if (value >= 90) {
+          } else if (value > 90) {
             counts.superior += 1;
           } else if (value >= 50) {
             counts.alto += 1;
@@ -924,6 +955,13 @@ function Consolidados({ data, userInfo }) {
     [indicatorRows],
   );
 
+  const filteredByColorRows = useMemo(() => {
+    if (!selectedColorRange) return [];
+    return indicatorRows.filter(
+      (row) => getColorCategory(row.executionPercent) === selectedColorRange,
+    );
+  }, [indicatorRows, selectedColorRange]);
+
   const clearFilters = () => {
     setSelectedDependency(canSeeAll ? "" : userDependencyId);
     setSelectedTipoDependencia("");
@@ -934,6 +972,7 @@ function Consolidados({ data, userInfo }) {
     setSelectedFacultad("");
     setSelectedPrograma("");
     setSelectedResultado("");
+    setSelectedColorRange(null);
   };
 
   const exportToPdf = () => {
@@ -1185,7 +1224,8 @@ function Consolidados({ data, userInfo }) {
           row.desafioNombre,
           String(row.numIndicadores),
         ]),
-        ["Indicadores ejecutados", String(summaryTotals.executedIndicators)],
+        ["Total de indicadores", String(summaryTotals.totalIndicators)],
+        ["Indicadores iniciados", String(summaryTotals.startedIndicators)],
         [
           "Porcentaje de cumplimiento",
           `${summaryTotals.percentage.toFixed(1)}%`,
@@ -1209,7 +1249,7 @@ function Consolidados({ data, userInfo }) {
       ["Rango", "Cantidad"],
       [
         ["Mayores de 90%", indicatorColorCounts.superior],
-        ["Entre 50% y 89%", indicatorColorCounts.alto],
+        ["Entre 50% y 90%", indicatorColorCounts.alto],
         ["Entre 30% y 49%", indicatorColorCounts.medio],
         ["Entre 0% y 29%", indicatorColorCounts.bajo],
         ["Sin registro", indicatorColorCounts.sinRegistro],
@@ -1294,7 +1334,7 @@ function Consolidados({ data, userInfo }) {
       const getHexColor = (value) => {
         const number = parseSheetNumber(value);
         if (number === null || value === "Sin registro") return "#9e9e9e"; // gris
-        if (number >= 90) return "#90ee90"; // verde claro
+        if (number > 90) return "#90ee90"; // verde claro
         if (number >= 50) return "#add8e6"; // azul claro
         if (number >= 30) return "#ffff00"; // amarillo
         if (number >= 0) return "#fa8072"; // salmon
@@ -1330,8 +1370,13 @@ function Consolidados({ data, userInfo }) {
       });
 
       html += `<tr>`;
-      html += `<td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Indicadores ejecutados</td>`;
-      html += `<td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">${summaryTotals.executedIndicators}</td>`;
+      html += `<td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Total de indicadores</td>`;
+      html += `<td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">${summaryTotals.totalIndicators}</td>`;
+      html += `</tr>`;
+
+      html += `<tr>`;
+      html += `<td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">Indicadores iniciados</td>`;
+      html += `<td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">${summaryTotals.startedIndicators}</td>`;
       html += `</tr>`;
 
       html += `<tr>`;
@@ -1722,11 +1767,12 @@ function Consolidados({ data, userInfo }) {
       </ToggleButtonGroup>
 
       {viewType === "resumen" && (
-        <Paper
-          className="seguimientos-summary-horizontal"
-          elevation={1}
-          sx={{ mb: 10 }}
-        >
+        <>
+          <Paper
+            className="seguimientos-summary-horizontal"
+            elevation={1}
+            sx={{ mb: selectedColorRange ? 4 : 10 }}
+          >
           <Box className="seguimientos-summary-inner">
             <Box className="seguimientos-summary-section seguimientos-summary-resumen">
               <Typography variant="h6" sx={{ fontWeight: 800, mb: 1 }}>
@@ -1811,46 +1857,79 @@ function Consolidados({ data, userInfo }) {
                     <Table size="small">
                       <TableBody>
                         {[
-                          [
-                            "Mayores de 90%",
-                            indicatorColorCounts.superior,
-                            "lightgreen",
-                          ],
-                          [
-                            "Entre 50% y 89%",
-                            indicatorColorCounts.alto,
-                            "lightblue",
-                          ],
-                          [
-                            "Entre 30% y 49%",
-                            indicatorColorCounts.medio,
-                            "yellow",
-                          ],
-                          [
-                            "Entre 0% y 29%",
-                            indicatorColorCounts.bajo,
-                            "salmon",
-                          ],
-                          [
-                            "Sin registro",
-                            indicatorColorCounts.sinRegistro,
-                            "grey",
-                          ],
-                        ].map(([label, count, color]) => (
-                          <TableRow key={label}>
-                            <TableCell
+                          {
+                            key: "superior",
+                            label: "Mayores de 90%",
+                            count: indicatorColorCounts.superior,
+                            color: "lightgreen",
+                          },
+                          {
+                            key: "alto",
+                            label: "Entre 50% y 90%",
+                            count: indicatorColorCounts.alto,
+                            color: "lightblue",
+                          },
+                          {
+                            key: "medio",
+                            label: "Entre 30% y 49%",
+                            count: indicatorColorCounts.medio,
+                            color: "yellow",
+                          },
+                          {
+                            key: "bajo",
+                            label: "Entre 0% y 29%",
+                            count: indicatorColorCounts.bajo,
+                            color: "salmon",
+                          },
+                          {
+                            key: "sinRegistro",
+                            label: "Sin registro",
+                            count: indicatorColorCounts.sinRegistro,
+                            color: "grey",
+                          },
+                        ].map(({ key, label, count, color }) => {
+                          const isSelected = selectedColorRange === key;
+                          return (
+                            <TableRow
+                              key={key}
+                              onClick={() =>
+                                setSelectedColorRange((prev) =>
+                                  prev === key ? null : key,
+                                )
+                              }
                               sx={{
-                                fontWeight: 800,
-                                backgroundColor: "#f5f5f5",
+                                cursor: "pointer",
+                                transition: "all 0.15s ease",
+                                outline: isSelected ? "2px solid #1976d2" : "none",
+                                outlineOffset: "-2px",
+                                "&:hover": {
+                                  opacity: 0.85,
+                                  boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.15)",
+                                },
                               }}
                             >
-                              {label}
-                            </TableCell>
-                            <TableCell sx={{ backgroundColor: color }}>
-                              {count}
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                              <TableCell
+                                sx={{
+                                  fontWeight: 800,
+                                  backgroundColor: isSelected ? "#e3f2fd" : "#f5f5f5",
+                                  userSelect: "none",
+                                }}
+                              >
+                                {label}
+                                {isSelected ? " ✓" : ""}
+                              </TableCell>
+                              <TableCell
+                                sx={{
+                                  backgroundColor: color,
+                                  fontWeight: isSelected ? 800 : "normal",
+                                  userSelect: "none",
+                                }}
+                              >
+                                {count}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </TableContainer>
@@ -1859,39 +1938,110 @@ function Consolidados({ data, userInfo }) {
                   </Typography>
                 </Box>
               </Box>
-              <Box className="seguimientos-stats-cards">
+              <Box
+                className="seguimientos-stats-cards"
+                sx={{
+                  display: "flex",
+                  flexWrap: { xs: "wrap", sm: "nowrap" },
+                  gap: 1.5,
+                  width: "100%",
+                  mt: 1.5,
+                }}
+              >
                 <Paper
                   className="seguimientos-stat-card"
                   elevation={0}
-                  sx={{ backgroundColor: "#b4b4b4ff" }}
+                  sx={{
+                    backgroundColor: "#b4b4b4ff",
+                    flex: 1,
+                    minWidth: 0,
+                    p: { xs: 1.2, md: 1.5 },
+                  }}
                 >
                   <Typography
                     className="seguimientos-stat-label"
-                    sx={{ color: "#000000ff", fontWeight: 500 }}
+                    sx={{
+                      color: "#000000ff",
+                      fontWeight: 600,
+                      fontSize: { xs: "0.75rem", md: "0.85rem" },
+                      whiteSpace: "nowrap",
+                      mb: 0.5,
+                    }}
                   >
-                    Indicadores ejecutados
+                    Total de indicadores
                   </Typography>
                   <Typography
                     className="seguimientos-stat-value"
-                    sx={{ size: "2.5rem", fontWeight: 800 }}
+                    sx={{
+                      fontSize: { xs: "1.2rem", md: "1.45rem" },
+                      fontWeight: 800,
+                    }}
                   >
-                    {summaryTotals.executedIndicators}
+                    {summaryTotals.totalIndicators}
                   </Typography>
                 </Paper>
+
                 <Paper
                   className="seguimientos-stat-card"
                   elevation={0}
-                  sx={{ backgroundColor: "#b4b4b4ff" }}
+                  sx={{
+                    backgroundColor: "#b4b4b4ff",
+                    flex: 1,
+                    minWidth: 0,
+                    p: { xs: 1.2, md: 1.5 },
+                  }}
                 >
                   <Typography
                     className="seguimientos-stat-label"
-                    sx={{ color: "#000000ff", fontWeight: 500 }}
+                    sx={{
+                      color: "#000000ff",
+                      fontWeight: 600,
+                      fontSize: { xs: "0.75rem", md: "0.85rem" },
+                      whiteSpace: "nowrap",
+                      mb: 0.5,
+                    }}
+                  >
+                    Indicadores iniciados
+                  </Typography>
+                  <Typography
+                    className="seguimientos-stat-value"
+                    sx={{
+                      fontSize: { xs: "1.2rem", md: "1.45rem" },
+                      fontWeight: 800,
+                    }}
+                  >
+                    {summaryTotals.startedIndicators}
+                  </Typography>
+                </Paper>
+
+                <Paper
+                  className="seguimientos-stat-card"
+                  elevation={0}
+                  sx={{
+                    backgroundColor: "#b4b4b4ff",
+                    flex: 1,
+                    minWidth: 0,
+                    p: { xs: 1.2, md: 1.5 },
+                  }}
+                >
+                  <Typography
+                    className="seguimientos-stat-label"
+                    sx={{
+                      color: "#000000ff",
+                      fontWeight: 600,
+                      fontSize: { xs: "0.75rem", md: "0.85rem" },
+                      whiteSpace: "nowrap",
+                      mb: 0.5,
+                    }}
                   >
                     Porcentaje de cumplimiento
                   </Typography>
                   <Typography
                     className="seguimientos-stat-value"
-                    sx={{ size: "2.5rem", fontWeight: 800 }}
+                    sx={{
+                      fontSize: { xs: "1.2rem", md: "1.45rem" },
+                      fontWeight: 800,
+                    }}
                   >
                     {summaryTotals.percentage.toFixed(1).replace(".", ",")}%
                   </Typography>
@@ -1900,6 +2050,197 @@ function Consolidados({ data, userInfo }) {
             </Box>
           </Box>
         </Paper>
+        {selectedColorRange && (
+          <Box sx={{ mb: 10 }}>
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: 1.5,
+                mb: 1.5,
+                p: 1.5,
+                bgcolor: "#f8f9fa",
+                borderRadius: 2,
+                border: "1px solid #e0e0e0",
+              }}
+            >
+              <Typography
+                variant="h6"
+                sx={{ fontWeight: 800, color: "#164e63" }}
+              >
+                Indicadores:{" "}
+                {[
+                  { key: "superior", label: "Mayores de 90%" },
+                  { key: "alto", label: "Entre 50% y 90%" },
+                  { key: "medio", label: "Entre 30% y 49%" },
+                  { key: "bajo", label: "Entre 0% y 29%" },
+                  { key: "sinRegistro", label: "Sin registro" },
+                ].find((r) => r.key === selectedColorRange)?.label}{" "}
+                ({filteredByColorRows.length})
+              </Typography>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={showDependencyColumn}
+                      onChange={(event) =>
+                        setShowDependencyColumn(event.target.checked)
+                      }
+                    />
+                  }
+                  label="Mostrar dependencia"
+                />
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="primary"
+                  onClick={() => setSelectedColorRange(null)}
+                >
+                  Cerrar lista
+                </Button>
+              </Box>
+            </Box>
+
+            <TableContainer
+              component={Paper}
+              className="seguimientos-table-card"
+            >
+              <Table size="small">
+                <TableBody>
+                  <TableRow>
+                    <TableCell
+                      sx={{
+                        fontWeight: 800,
+                        width: groupingMode === "eje" ? 90 : 120,
+                        minWidth: groupingMode === "eje" ? 85 : 110,
+                        maxWidth: groupingMode === "eje" ? 100 : 140,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {dimensionLabel}
+                    </TableCell>
+                    {groupingMode !== "eje" && (
+                      <TableCell sx={{ fontWeight: 800, width: 160, minWidth: 140 }}>
+                        Estrategia Convergente
+                      </TableCell>
+                    )}
+                    {groupingMode !== "eje" && (
+                      <TableCell sx={{ fontWeight: 800, width: 160, minWidth: 140 }}>
+                        Estrategia Facultad
+                      </TableCell>
+                    )}
+                    {showDependencyColumn && (
+                      <TableCell sx={{ fontWeight: 800, width: 170, minWidth: 150, maxWidth: 220 }}>
+                        Dependencia
+                      </TableCell>
+                    )}
+                    <TableCell sx={{ fontWeight: 800 }}>
+                      Nombre Indicador
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 800, width: 110, minWidth: 100, whiteSpace: "nowrap" }}>
+                      Meta planeada
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 800, width: 110, minWidth: 100, whiteSpace: "nowrap" }}>
+                      Meta ejecutada
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 800, width: 120, minWidth: 110, whiteSpace: "nowrap" }}>
+                      Porcentaje ejecutado
+                    </TableCell>
+                  </TableRow>
+                  {filteredByColorRows.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={detailedColumns.length}
+                        align="center"
+                        sx={{ py: 3 }}
+                      >
+                        No hay indicadores en este rango.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredByColorRows.map((row) => (
+                      <TableRow key={row.id}>
+                        <TableCell
+                          sx={{
+                            whiteSpace: "nowrap",
+                            width: groupingMode === "eje" ? 90 : 120,
+                            minWidth: groupingMode === "eje" ? 85 : 110,
+                            maxWidth: groupingMode === "eje" ? 100 : 140,
+                          }}
+                        >
+                          <Tooltip title={toText(row.desafioNombre)}>
+                            <span>
+                              {groupingMode === "eje"
+                                ? compactEjeLabel(row.desafioNombre, row.eje || row.id_desafio)
+                                : compactDesafioLabel(
+                                    row.desafioNombre,
+                                    row.id_desafio,
+                                  )}
+                            </span>
+                          </Tooltip>
+                        </TableCell>
+                        {groupingMode !== "eje" && (
+                          <TableCell>
+                            <Tooltip title={toText(row.convergenteNombre)}>
+                              <span>
+                                {compactConvergenteLabel(
+                                  row.convergenteNombre,
+                                )}
+                              </span>
+                            </Tooltip>
+                          </TableCell>
+                        )}
+                        {groupingMode !== "eje" && (
+                          <TableCell>
+                            <Tooltip title={toText(row.facultadNombre)}>
+                              <span>
+                                {compactFacultadLabel(row.facultadNombre)}
+                              </span>
+                            </Tooltip>
+                          </TableCell>
+                        )}
+                        {showDependencyColumn && (
+                          <TableCell sx={{ maxWidth: 220, wordBreak: "break-word" }}>
+                            {toText(row.dependenciaNombre)}
+                          </TableCell>
+                        )}
+                        <TableCell sx={{ wordBreak: "break-word" }}>{toText(row.nombre)}</TableCell>
+                        <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
+                          {row.metaValue ?? "Sin registro"}
+                        </TableCell>
+                        <TableCell
+                          align="right"
+                          sx={{
+                            whiteSpace: "nowrap",
+                            backgroundColor: percentageClass(
+                              row.executionPercent,
+                            ),
+                          }}
+                        >
+                          {row.avanceValue ?? "Sin registro"}
+                        </TableCell>
+                        <TableCell
+                          align="right"
+                          sx={{
+                            whiteSpace: "nowrap",
+                            backgroundColor: percentageClass(
+                              row.executionPercent,
+                            ),
+                          }}
+                        >
+                          {row.executionPercent}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+        )}
+      </>
       )}
 
       {viewType === "indicadores" && (
@@ -1925,40 +2266,59 @@ function Consolidados({ data, userInfo }) {
             <Table size="small">
               <TableBody>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 800 }}>
+                  <TableCell
+                    sx={{
+                      fontWeight: 800,
+                      width: groupingMode === "eje" ? 90 : 120,
+                      minWidth: groupingMode === "eje" ? 85 : 110,
+                      maxWidth: groupingMode === "eje" ? 100 : 140,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
                     {dimensionLabel}
                   </TableCell>
-                  {groupingMode !== "eje" ? (
-                    <TableCell sx={{ fontWeight: 800 }}>
+                  {groupingMode !== "eje" && (
+                    <TableCell sx={{ fontWeight: 800, width: 160, minWidth: 140 }}>
                       Estrategia Convergente
                     </TableCell>
-                  ) : (
-                    ""
                   )}
                   {groupingMode !== "eje" && (
-                    <TableCell sx={{ fontWeight: 800 }}>
+                    <TableCell sx={{ fontWeight: 800, width: 160, minWidth: 140 }}>
                       Estrategia Facultad
                     </TableCell>
                   )}
                   {showDependencyColumn && (
-                    <TableCell sx={{ fontWeight: 800 }}>Dependencia</TableCell>
+                    <TableCell sx={{ fontWeight: 800, width: 170, minWidth: 150, maxWidth: 220 }}>
+                      Dependencia
+                    </TableCell>
                   )}
                   <TableCell sx={{ fontWeight: 800 }}>
                     Nombre Indicador
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 800 }}>Meta planeada</TableCell>
-                  <TableCell sx={{ fontWeight: 800 }}>Meta ejecutada</TableCell>
-                  <TableCell sx={{ fontWeight: 800 }}>
+                  <TableCell align="right" sx={{ fontWeight: 800, width: 110, minWidth: 100, whiteSpace: "nowrap" }}>
+                    Meta planeada
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 800, width: 110, minWidth: 100, whiteSpace: "nowrap" }}>
+                    Meta ejecutada
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 800, width: 120, minWidth: 110, whiteSpace: "nowrap" }}>
                     Porcentaje ejecutado
                   </TableCell>
                 </TableRow>
                 {indicatorRows.map((row) => (
                   <TableRow key={row.id}>
-                    <TableCell sx={{ whiteSpace: "nowrap" }}>
+                    <TableCell
+                      sx={{
+                        whiteSpace: "nowrap",
+                        width: groupingMode === "eje" ? 90 : 120,
+                        minWidth: groupingMode === "eje" ? 85 : 110,
+                        maxWidth: groupingMode === "eje" ? 100 : 140,
+                      }}
+                    >
                       <Tooltip title={toText(row.desafioNombre)}>
                         <span>
                           {groupingMode === "eje"
-                            ? toText(row.desafioNombre)
+                            ? compactEjeLabel(row.desafioNombre, row.eje || row.id_desafio)
                             : compactDesafioLabel(
                                 row.desafioNombre,
                                 row.id_desafio,
@@ -1966,7 +2326,7 @@ function Consolidados({ data, userInfo }) {
                         </span>
                       </Tooltip>
                     </TableCell>
-                    {groupingMode !== "eje" ? (
+                    {groupingMode !== "eje" && (
                       <TableCell>
                         <Tooltip title={toText(row.convergenteNombre)}>
                           <span>
@@ -1974,8 +2334,6 @@ function Consolidados({ data, userInfo }) {
                           </span>
                         </Tooltip>
                       </TableCell>
-                    ) : (
-                      ""
                     )}
                     {groupingMode !== "eje" && (
                       <TableCell>
@@ -1987,19 +2345,27 @@ function Consolidados({ data, userInfo }) {
                       </TableCell>
                     )}
                     {showDependencyColumn && (
-                      <TableCell>{toText(row.dependenciaNombre)}</TableCell>
+                      <TableCell sx={{ maxWidth: 220, wordBreak: "break-word" }}>
+                        {toText(row.dependenciaNombre)}
+                      </TableCell>
                     )}
-                    <TableCell>{toText(row.nombre)}</TableCell>
-                    <TableCell>{row.metaValue ?? "Sin registro"}</TableCell>
+                    <TableCell sx={{ wordBreak: "break-word" }}>{toText(row.nombre)}</TableCell>
+                    <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
+                      {row.metaValue ?? "Sin registro"}
+                    </TableCell>
                     <TableCell
+                      align="right"
                       sx={{
+                        whiteSpace: "nowrap",
                         backgroundColor: percentageClass(row.executionPercent),
                       }}
                     >
                       {row.avanceValue ?? "Sin registro"}
                     </TableCell>
                     <TableCell
+                      align="right"
                       sx={{
+                        whiteSpace: "nowrap",
                         backgroundColor: percentageClass(row.executionPercent),
                       }}
                     >
@@ -2014,7 +2380,7 @@ function Consolidados({ data, userInfo }) {
                   >
                     Total porcentaje ejecutado
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 800 }}>
+                  <TableCell align="right" sx={{ fontWeight: 800 }}>
                     {summaryTotals.percentage.toFixed(1).replace(".", ",")}%
                   </TableCell>
                 </TableRow>
@@ -2025,7 +2391,7 @@ function Consolidados({ data, userInfo }) {
                   >
                     Pendiente por ejecutar
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 800 }}>
+                  <TableCell align="right" sx={{ fontWeight: 800 }}>
                     {summaryTotals.pending.toFixed(1).replace(".", ",")}%
                   </TableCell>
                 </TableRow>
@@ -2102,7 +2468,7 @@ function Consolidados({ data, userInfo }) {
                             py: 0.5,
                             borderRadius: 1,
                             backgroundColor:
-                              row.metaEjecutadaNum >= 90
+                              row.metaEjecutadaNum > 90
                                 ? "#d4edda"
                                 : row.metaEjecutadaNum >= 50
                                   ? "#cce5ff"
@@ -2110,7 +2476,7 @@ function Consolidados({ data, userInfo }) {
                                     ? "#fff3cd"
                                     : "#f8d7da",
                             color:
-                              row.metaEjecutadaNum >= 90
+                              row.metaEjecutadaNum > 90
                                 ? "#155724"
                                 : row.metaEjecutadaNum >= 50
                                   ? "#004085"
@@ -2326,7 +2692,7 @@ function Consolidados({ data, userInfo }) {
                                   py: 0.5,
                                   borderRadius: 1,
                                   backgroundColor:
-                                    itemData.metaEjecutadaNum >= 90
+                                    itemData.metaEjecutadaNum > 90
                                       ? "#d4edda"
                                       : itemData.metaEjecutadaNum >= 50
                                         ? "#cce5ff"
@@ -2334,7 +2700,7 @@ function Consolidados({ data, userInfo }) {
                                           ? "#fff3cd"
                                           : "#f8d7da",
                                   color:
-                                    itemData.metaEjecutadaNum >= 90
+                                    itemData.metaEjecutadaNum > 90
                                       ? "#155724"
                                       : itemData.metaEjecutadaNum >= 50
                                         ? "#004085"
@@ -2448,7 +2814,7 @@ function Consolidados({ data, userInfo }) {
                               py: 0.5,
                               borderRadius: 1,
                               backgroundColor:
-                                row.execPercentNum >= 90
+                                row.execPercentNum > 90
                                   ? "#d4edda"
                                   : row.execPercentNum >= 50
                                     ? "#cce5ff"
@@ -2456,7 +2822,7 @@ function Consolidados({ data, userInfo }) {
                                       ? "#fff3cd"
                                       : "#f8d7da",
                               color:
-                                row.execPercentNum >= 90
+                                row.execPercentNum > 90
                                   ? "#155724"
                                   : row.execPercentNum >= 50
                                     ? "#004085"
@@ -2483,7 +2849,7 @@ function Consolidados({ data, userInfo }) {
                             py: 0.5,
                             borderRadius: 1,
                             backgroundColor:
-                              globalTotals.execPercentNum >= 90
+                              globalTotals.execPercentNum > 90
                                 ? "#d4edda"
                                 : globalTotals.execPercentNum >= 50
                                   ? "#cce5ff"
@@ -2491,7 +2857,7 @@ function Consolidados({ data, userInfo }) {
                                     ? "#fff3cd"
                                     : "#f8d7da",
                             color:
-                              globalTotals.execPercentNum >= 90
+                              globalTotals.execPercentNum > 90
                                 ? "#155724"
                                 : globalTotals.execPercentNum >= 50
                                   ? "#004085"

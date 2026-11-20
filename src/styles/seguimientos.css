@@ -107,10 +107,9 @@
 }
 
 .seguimientos-stat-card {
-  flex: 1 1 180px;
-  min-width: 160px;
-  max-width: 280px;
-  padding: 16px 20px;
+  flex: 1 1 140px;
+  min-width: 120px;
+  padding: 14px 16px;
   border: 1px solid #cfd8dc;
   border-radius: 10px;
   background-color: #ffffff;
@@ -127,7 +126,7 @@
 .seguimientos-stat-value {
   font-weight: 800;
   color: #000000;
-  size: 2.5rem;
+  font-size: 1.45rem;
 }
 
 .seguimientos-empty {

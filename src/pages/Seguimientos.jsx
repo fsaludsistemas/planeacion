@@ -135,7 +135,7 @@ const matchesTipoDependenciaFilter = (
 
 const percentageClass = (value) => {
   const n = limpiarPorcentaje(value);
-  if (n >= 90) return "lightgreen";
+  if (n > 90) return "lightgreen";
   if (n >= 50) return "lightblue";
   if (n >= 30) return "yellow";
   if (n >= 0) return "salmon";
@@ -618,6 +618,7 @@ const Seguimientos = ({ data, userInfo }) => {
     return {
       promedio,
       pending: pendingPorcentaje,
+      numIniciados: totalEjecutados,
       numEjecutados: totalEjecutados,
       totalIndicadores: totalIndicadoresGeneral,
       porcentajeCumplimiento: promedio,
@@ -654,7 +655,7 @@ const Seguimientos = ({ data, userInfo }) => {
           ),
         );
         if (value === null) return acc;
-        if (value >= 90) acc.superior += 1;
+        if (value > 90) acc.superior += 1;
         else if (value >= 50) acc.alto += 1;
         else if (value >= 30) acc.medio += 1;
         else if (value >= 0) acc.bajo += 1;
@@ -843,7 +844,7 @@ const Seguimientos = ({ data, userInfo }) => {
             const numValue = parseFloat(cleanValue);
             if (!isNaN(numValue)) {
               let color;
-              if (numValue >= 90)
+              if (numValue > 90)
                 color = [144, 238, 144]; // lightgreen
               else if (numValue >= 50)
                 color = [173, 216, 230]; // lightblue
@@ -1046,7 +1047,7 @@ const Seguimientos = ({ data, userInfo }) => {
         indicatorColorCounts.superior.toString(),
         "Verde claro",
       ],
-      ["Entre 50% y 89%", indicatorColorCounts.alto.toString(), "Azul claro"],
+      ["Entre 50% y 90%", indicatorColorCounts.alto.toString(), "Azul claro"],
       ["Entre 30% y 49%", indicatorColorCounts.medio.toString(), "Amarillo"],
       ["Entre 0% y 29%", indicatorColorCounts.bajo.toString(), "Salmon"],
       ["Sin registro", indicatorColorCounts.sinRegistro.toString(), "Black"],
@@ -1465,33 +1466,55 @@ const Seguimientos = ({ data, userInfo }) => {
               <Paper
                 className="seguimientos-stat-card"
                 elevation={0}
-                sx={{ backgroundColor: "#b4b4b4ff" }}
+                sx={{ backgroundColor: "#b4b4b4ff", flex: 1, minWidth: 0, p: 1.5 }}
               >
                 <Typography
                   className="seguimientos-stat-label"
-                  sx={{ color: "#000000ff" }}
+                  sx={{ color: "#000000ff", fontWeight: 600, fontSize: "0.85rem", whiteSpace: "nowrap" }}
                 >
-                  Indicadores ejecutados
+                  Total de indicadores
                 </Typography>
                 <Typography
                   className="seguimientos-stat-value"
                   sx={{
                     color: "#000000ff",
                     fontWeight: 800,
-                    fontSize: "1.5rem",
+                    fontSize: "1.45rem",
                   }}
                 >
-                  {totals.numEjecutados}
+                  {totals.totalIndicadores}
                 </Typography>
               </Paper>
               <Paper
                 className="seguimientos-stat-card"
                 elevation={0}
-                sx={{ backgroundColor: "#b4b4b4ff" }}
+                sx={{ backgroundColor: "#b4b4b4ff", flex: 1, minWidth: 0, p: 1.5 }}
               >
                 <Typography
                   className="seguimientos-stat-label"
-                  sx={{ color: "#000000ff" }}
+                  sx={{ color: "#000000ff", fontWeight: 600, fontSize: "0.85rem", whiteSpace: "nowrap" }}
+                >
+                  Indicadores iniciados
+                </Typography>
+                <Typography
+                  className="seguimientos-stat-value"
+                  sx={{
+                    color: "#000000ff",
+                    fontWeight: 800,
+                    fontSize: "1.45rem",
+                  }}
+                >
+                  {totals.numIniciados}
+                </Typography>
+              </Paper>
+              <Paper
+                className="seguimientos-stat-card"
+                elevation={0}
+                sx={{ backgroundColor: "#b4b4b4ff", flex: 1, minWidth: 0, p: 1.5 }}
+              >
+                <Typography
+                  className="seguimientos-stat-label"
+                  sx={{ color: "#000000ff", fontWeight: 600, fontSize: "0.85rem", whiteSpace: "nowrap" }}
                 >
                   Porcentaje de cumplimiento
                 </Typography>
@@ -1500,7 +1523,7 @@ const Seguimientos = ({ data, userInfo }) => {
                   sx={{
                     color: "#000000ff",
                     fontWeight: 800,
-                    fontSize: "1.5rem",
+                    fontSize: "1.45rem",
                   }}
                 >
                   {totals.porcentajeCumplimiento.toFixed(1).replace(".", ",")}%
