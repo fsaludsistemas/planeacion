@@ -94,4 +94,14 @@ export const deleteDrive = async (fileId) => {
   }
 };
 
+export const syncSheets = async () => {
+  try {
+    const response = await api.post("/sync-sheets");
+    return response.data;
+  } catch (error) {
+    console.error("Error sincronizando hojas de cálculo:", error);
+    throw error;
+  }
+};
+
 export default api;

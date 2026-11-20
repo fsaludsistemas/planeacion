@@ -2,21 +2,24 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Box,
+  Button,
   Container,
   Paper,
   Tab,
   Tabs,
   Typography,
 } from "@mui/material";
+import SyncIcon from "@mui/icons-material/Sync";
 import Cookies from "js-cookie";
 import Header from "./components/Header";
 import LoadingIndicator from "./components/LoadingIndicator";
 import GoogleLogin from "./components/GoogleLogin";
+import SyncSheetsModal from "./components/SyncSheetsModal";
 import IndicatorsPage from "./pages/IndicatorsPage";
 import Usuarios from "./pages/Usuarios";
 import Consolidados from "./pages/Consolidados";
 import Documentos from "./pages/Documentos";
-import { getData } from "./api/api";
+import { getData, syncSheets } from "./api/api";
 import "./App.css";
 
 const App = () => {
@@ -27,6 +30,10 @@ const App = () => {
   const [userInfo, setUserInfo] = useState(null);
   const [appData, setAppData] = useState(null);
   const [dataError, setDataError] = useState("");
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState(null);
+  const [syncError, setSyncError] = useState("");
 
   const resolveDataset = (payload) => {
     if (payload?.data && typeof payload.data === "object") {
@@ -51,6 +58,10 @@ const App = () => {
     userRole === "administrador" ||
     userRole === "sistemas" ||
     userRole === "calidad" ||
+    String(userInfo?.id || "") === "0";
+  const isAdmin =
+    userRole === "administrador" ||
+    userRole === "sistemas" ||
     String(userInfo?.id || "") === "0";
   const dependencyName = useMemo(() => {
     const dependencies = appData?.DEPENDENCIA || appData?.DEPENDENCIAS || [];
@@ -87,8 +98,8 @@ const App = () => {
     const users = Array.isArray(dataset?.USUARIOS)
       ? dataset.USUARIOS
       : Array.isArray(dataset?.USUARIO)
-      ? dataset.USUARIO
-      : [];
+        ? dataset.USUARIO
+        : [];
 
     const userEmail = (currentUser?.correo || "").trim().toLowerCase();
     const userId = String(currentUser?.id || "").trim();
@@ -101,7 +112,9 @@ const App = () => {
     });
 
     if (!matchedUser) {
-      console.warn("Usuario no encontrado en la lista de usuarios autorizados.");
+      console.warn(
+        "Usuario no encontrado en la lista de usuarios autorizados.",
+      );
       return null;
     }
 
@@ -119,7 +132,9 @@ const App = () => {
         (matchedUser.correo ? matchedUser.correo.split("@")[0] : "Usuario"),
     };
 
-    if (String(currentUser.id_dependencia) !== String(updatedUser.id_dependencia)) {
+    if (
+      String(currentUser.id_dependencia) !== String(updatedUser.id_dependencia)
+    ) {
       sessionStorage.removeItem("indicators.filters");
       sessionStorage.removeItem("indicators.lastExpandedId");
     }
@@ -211,6 +226,28 @@ const App = () => {
       setIsDataLoading(false);
     }
   }, [applyDatasetAndSyncUser]);
+
+  const handleSyncSheets = async () => {
+    setIsSyncModalOpen(true);
+    setIsSyncing(true);
+    setSyncResult(null);
+    setSyncError("");
+
+    try {
+      const res = await syncSheets();
+      setSyncResult(res);
+      await refreshAppData();
+    } catch (err) {
+      console.error("Error al sincronizar hojas:", err);
+      setSyncError(
+        err.response?.data?.message ||
+          err.message ||
+          "Error al comunicarse con el servidor para sincronizar.",
+      );
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const handleChange = (event, newValue) => {
     setIsLoading(true);
@@ -325,7 +362,18 @@ const App = () => {
                 Planear hoy para construir la Facultad de Salud que soñamos.
               </Typography>
             </Paper>
-            <Box>
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: 1.5,
+                borderBottom: 1,
+                borderColor: "divider",
+                mb: 1.5,
+              }}
+            >
               <Tabs
                 value={currentTab}
                 onChange={handleChange}
@@ -350,7 +398,34 @@ const App = () => {
                   sx={{ fontSize: "1rem", fontWeight: "bold" }}
                 />
               </Tabs>
+
+              {isAdmin && (
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  startIcon={<SyncIcon />}
+                  onClick={handleSyncSheets}
+                  disabled={isSyncing || isDataLoading}
+                  sx={{
+                    fontWeight: 700,
+                    textTransform: "none",
+                    borderRadius: 2,
+                    borderWidth: 1.5,
+                    "&:hover": { borderWidth: 1.5 },
+                  }}
+                >
+                  {isSyncing ? "Sincronizando..." : "Sincronizar MDE's"}
+                </Button>
+              )}
             </Box>
+
+            <SyncSheetsModal
+              open={isSyncModalOpen}
+              onClose={() => setIsSyncModalOpen(false)}
+              loading={isSyncing}
+              result={syncResult}
+              error={syncError}
+            />
             <LoadingIndicator isLoading={isLoading || isDataLoading} />
             {dataError && (
               <Alert severity="error" sx={{ marginTop: "14px" }}>
