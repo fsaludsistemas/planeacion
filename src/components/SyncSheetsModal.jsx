@@ -91,7 +91,7 @@ const SyncSheetsModal = ({ open, onClose, loading, result, error }) => {
             <Box
               sx={{
                 display: "grid",
-                gridTemplateColumns: { xs: "1fr", sm: "repeat(3, 1fr)" },
+                gridTemplateColumns: { xs: "1fr 1fr", sm: "repeat(4, 1fr)" },
                 gap: 1.5,
               }}
             >
@@ -142,7 +142,25 @@ const SyncSheetsModal = ({ open, onClose, loading, result, error }) => {
                 }}
               >
                 <Typography variant="caption" sx={{ color: "#64748b", fontWeight: 600 }}>
-                  NUEVOS INDICADORES CREADOS
+                  AVANCES ACTUALIZADOS
+                </Typography>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: "#d97706" }}>
+                  {result.totalAvancesActualizados ?? 0}
+                </Typography>
+              </Paper>
+
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 1.5,
+                  bgcolor: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: 2,
+                  textAlign: "center",
+                }}
+              >
+                <Typography variant="caption" sx={{ color: "#64748b", fontWeight: 600 }}>
+                  NUEVOS CREADOS
                 </Typography>
                 <Typography variant="h5" sx={{ fontWeight: 800, color: "#9333ea" }}>
                   {result.totalNuevosIndicadores ?? 0}
