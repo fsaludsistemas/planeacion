@@ -138,7 +138,7 @@ const percentageClass = (value) => {
   if (n > 90) return "lightgreen";
   if (n >= 50) return "lightblue";
   if (n >= 30) return "yellow";
-  if (n >= 0) return "salmon";
+  if (n >= 1) return "salmon";
   return "transparent";
 };
 
@@ -648,29 +648,27 @@ const Seguimientos = ({ data, userInfo }) => {
       (acc, indicator) => {
         const meta = metaByIndicatorId.get(String(indicator.id));
         const avance = avanceByIndicatorId.get(String(indicator.id));
-        const value = parseSheetNumber(
-          formatExecutionPercent(
-            meta ? meta[`meta_${selectedYear}`] : null,
-            avance ? avance[`avance_${selectedYear}`] : null,
-          ),
+        const rawPercent = formatExecutionPercent(
+          meta ? meta[`meta_${selectedYear}`] : null,
+          avance ? avance[`avance_${selectedYear}`] : null,
         );
-        if (value === null) return acc;
-        if (value > 90) acc.superior += 1;
-        else if (value >= 50) acc.alto += 1;
-        else if (value >= 30) acc.medio += 1;
-        else if (value >= 0) acc.bajo += 1;
-        else if (
-          value == "Sin registro" ||
-          value === "sin registro" ||
-          value === "" ||
-          value === null
-        )
+        const value = parseSheetNumber(rawPercent);
+        if (value === null || rawPercent === "Sin registro" || value < 1) {
           acc.sinRegistro += 1;
+        } else if (value > 90) {
+          acc.superior += 1;
+        } else if (value >= 50) {
+          acc.alto += 1;
+        } else if (value >= 30) {
+          acc.medio += 1;
+        } else {
+          acc.bajo += 1;
+        }
         return acc;
       },
       { superior: 0, alto: 0, medio: 0, bajo: 0, sinRegistro: 0 },
     );
-  }, [filterableIndicators, avanceByIndicatorId, selectedYear]);
+  }, [filterableIndicators, avanceByIndicatorId, metaByIndicatorId, selectedYear]);
 
   const exportToPdf = () => {
     // Crear documento PDF
@@ -850,7 +848,7 @@ const Seguimientos = ({ data, userInfo }) => {
                 color = [173, 216, 230]; // lightblue
               else if (numValue >= 30)
                 color = [255, 255, 0]; // yellow
-              else if (numValue >= 0) color = [250, 128, 114]; // salmon
+              else if (numValue >= 1) color = [250, 128, 114]; // salmon
               if (color) {
                 doc.setFillColor(color[0], color[1], color[2]);
                 doc.rect(
@@ -1049,7 +1047,7 @@ const Seguimientos = ({ data, userInfo }) => {
       ],
       ["Entre 50% y 90%", indicatorColorCounts.alto.toString(), "Azul claro"],
       ["Entre 30% y 49%", indicatorColorCounts.medio.toString(), "Amarillo"],
-      ["Entre 0% y 29%", indicatorColorCounts.bajo.toString(), "Salmon"],
+      ["Entre 1% y 29%", indicatorColorCounts.bajo.toString(), "Salmon"],
       ["Sin registro", indicatorColorCounts.sinRegistro.toString(), "Black"],
     ];
 
@@ -1440,7 +1438,7 @@ const Seguimientos = ({ data, userInfo }) => {
                         <TableCell
                           sx={{ fontWeight: 800, backgroundColor: "#f5f5f5" }}
                         >
-                          Entre 0% y 29%
+                          Entre 1% y 29%
                         </TableCell>
                         <TableCell sx={{ backgroundColor: "salmon" }}>
                           {indicatorColorCounts.bajo}

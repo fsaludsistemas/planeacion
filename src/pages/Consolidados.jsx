@@ -105,13 +105,13 @@ const percentageClass = (value) => {
   if (number > 90) return "lightgreen";
   if (number >= 50) return "lightblue";
   if (number >= 30) return "yellow";
-  if (number >= 0) return "salmon";
+  if (number >= 1) return "salmon";
   return "transparent";
 };
 
 const getColorCategory = (value) => {
   const number = parseSheetNumber(value);
-  if (number === null || value === "Sin registro") {
+  if (number === null || value === "Sin registro" || number < 1) {
     return "sinRegistro";
   } else if (number > 90) {
     return "superior";
@@ -937,7 +937,11 @@ function Consolidados({ data, userInfo }) {
       indicatorRows.reduce(
         (counts, row) => {
           const value = parseSheetNumber(row.executionPercent);
-          if (value === null || row.executionPercent === "Sin registro") {
+          if (
+            value === null ||
+            row.executionPercent === "Sin registro" ||
+            value < 1
+          ) {
             counts.sinRegistro += 1;
           } else if (value > 90) {
             counts.superior += 1;
@@ -1251,7 +1255,7 @@ function Consolidados({ data, userInfo }) {
         ["Mayores de 90%", indicatorColorCounts.superior],
         ["Entre 50% y 90%", indicatorColorCounts.alto],
         ["Entre 30% y 49%", indicatorColorCounts.medio],
-        ["Entre 0% y 29%", indicatorColorCounts.bajo],
+        ["Entre 1% y 29%", indicatorColorCounts.bajo],
         ["Sin registro", indicatorColorCounts.sinRegistro],
       ],
       {
@@ -1333,11 +1337,11 @@ function Consolidados({ data, userInfo }) {
     try {
       const getHexColor = (value) => {
         const number = parseSheetNumber(value);
-        if (number === null || value === "Sin registro") return "#9e9e9e"; // gris
+        if (number === null || value === "Sin registro" || number < 1) return "#9e9e9e"; // gris
         if (number > 90) return "#90ee90"; // verde claro
         if (number >= 50) return "#add8e6"; // azul claro
         if (number >= 30) return "#ffff00"; // amarillo
-        if (number >= 0) return "#fa8072"; // salmon
+        if (number >= 1) return "#fa8072"; // salmon
         return "transparent";
       };
 
@@ -1877,7 +1881,7 @@ function Consolidados({ data, userInfo }) {
                           },
                           {
                             key: "bajo",
-                            label: "Entre 0% y 29%",
+                            label: "Entre 1% y 29%",
                             count: indicatorColorCounts.bajo,
                             color: "salmon",
                           },
@@ -2075,7 +2079,7 @@ function Consolidados({ data, userInfo }) {
                   { key: "superior", label: "Mayores de 90%" },
                   { key: "alto", label: "Entre 50% y 90%" },
                   { key: "medio", label: "Entre 30% y 49%" },
-                  { key: "bajo", label: "Entre 0% y 29%" },
+                  { key: "bajo", label: "Entre 1% y 29%" },
                   { key: "sinRegistro", label: "Sin registro" },
                 ].find((r) => r.key === selectedColorRange)?.label}{" "}
                 ({filteredByColorRows.length})

@@ -20,6 +20,7 @@ import Usuarios from "./pages/Usuarios";
 import Consolidados from "./pages/Consolidados";
 import Documentos from "./pages/Documentos";
 import { getData, syncSheets } from "./api/api";
+import { formatDependenciesList } from "./utils/formatters";
 import "./App.css";
 
 const App = () => {
@@ -36,15 +37,24 @@ const App = () => {
   const [syncError, setSyncError] = useState("");
 
   const resolveDataset = (payload) => {
+    let raw = null;
     if (payload?.data && typeof payload.data === "object") {
-      return payload.data;
+      raw = payload.data;
+    } else if (payload && typeof payload === "object") {
+      raw = payload;
     }
 
-    if (payload && typeof payload === "object") {
-      return payload;
+    if (!raw) return null;
+
+    const dataset = { ...raw };
+    if (Array.isArray(dataset.DEPENDENCIAS)) {
+      dataset.DEPENDENCIAS = formatDependenciesList(dataset.DEPENDENCIAS);
+    }
+    if (Array.isArray(dataset.DEPENDENCIA)) {
+      dataset.DEPENDENCIA = formatDependenciesList(dataset.DEPENDENCIA);
     }
 
-    return null;
+    return dataset;
   };
 
   const userRole = useMemo(
