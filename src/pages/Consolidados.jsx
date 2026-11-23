@@ -105,13 +105,13 @@ const percentageClass = (value) => {
   if (number > 90) return "lightgreen";
   if (number >= 50) return "lightblue";
   if (number >= 30) return "yellow";
-  if (number >= 0) return "salmon";
+  if (number >= 1) return "salmon";
   return "transparent";
 };
 
 const getColorCategory = (value) => {
   const number = parseSheetNumber(value);
-  if (number === null || value === "Sin registro") {
+  if (number === null || value === "Sin registro" || number < 1) {
     return "sinRegistro";
   } else if (number > 90) {
     return "superior";
@@ -131,8 +131,9 @@ const compactDesafioLabel = (name, id) => {
 
 const compactEjeLabel = (name, id) => {
   const clean = String(name ?? "").trim();
+  if (clean.toLowerCase() === "sin eje" || id === "sin_eje") return "Sin eje";
   const match = clean.match(/^Eje\s+\d+/i);
-  return match?.[0] || (id ? `Eje ${id}` : clean);
+  return match?.[0] || (id && id !== "sin_eje" ? `Eje ${id}` : clean);
 };
 
 const compactConvergenteLabel = (name) => {
@@ -198,12 +199,16 @@ function Consolidados({ data, userInfo }) {
     [ejesCatalog],
   );
   const ejes = useMemo(() => {
-    const values = new Set(
-      indicators
-        .map((indicator) => String(indicator.eje ?? "").trim())
-        .filter(Boolean),
-    );
-    return [...values].sort((a, b) => Number(a) - Number(b));
+    const values = new Set();
+    let hasSinEje = false;
+    indicators.forEach((indicator) => {
+      const val = String(indicator.eje ?? "").trim();
+      if (val) values.add(val);
+      else hasSinEje = true;
+    });
+    const sorted = [...values].sort((a, b) => Number(a) - Number(b));
+    if (hasSinEje) sorted.push("sin_eje");
+    return sorted;
   }, [indicators]);
   const metas = useMemo(() => sortById(getSheet(data, "METAS")), [data]);
   const avances = useMemo(() => sortById(getSheet(data, "AVANCES")), [data]);
@@ -264,8 +269,6 @@ function Consolidados({ data, userInfo }) {
   const filteredIndicators = useMemo(
     () =>
       indicators.filter((indicator) => {
-        if (groupingMode === "eje" && !String(indicator.eje ?? "").trim())
-          return false;
         if (
           !canSeeAll &&
           userDependencyId &&
@@ -282,8 +285,14 @@ function Consolidados({ data, userInfo }) {
           String(indicator.id_desafio || "") !== selectedDesafio
         )
           return false;
-        if (selectedEje && String(indicator.eje ?? "").trim() !== selectedEje)
-          return false;
+        if (selectedEje) {
+          const indEje = String(indicator.eje ?? "").trim();
+          if (selectedEje === "sin_eje") {
+            if (indEje !== "") return false;
+          } else if (indEje !== selectedEje) {
+            return false;
+          }
+        }
         if (
           selectedConvergente &&
           String(indicator.id_estrategia_convergente || "") !==
@@ -358,7 +367,8 @@ function Consolidados({ data, userInfo }) {
 
     filteredIndicators.forEach((indicator) => {
       const desafio = desafioById.get(String(indicator.id_desafio || ""));
-      const eje = String(indicator.eje ?? "").trim();
+      const rawEje = String(indicator.eje ?? "").trim();
+      const eje = rawEje || "sin_eje";
       const dimensionId =
         groupingMode === "eje" ? eje : String(desafio?.id || "");
       if (!dimensionId || (groupingMode === "desafio" && !desafio)) return;
@@ -419,7 +429,9 @@ function Consolidados({ data, userInfo }) {
         id_desafio: group.dimensionId,
         desafioNombre:
           groupingMode === "eje"
-            ? ejeById.get(String(group.dimensionId))?.nombre || `Eje ${group.dimensionId}`
+            ? group.dimensionId === "sin_eje"
+              ? "Sin eje"
+              : ejeById.get(String(group.dimensionId))?.nombre || `Eje ${group.dimensionId}`
             : group.desafio.titulo || `Desafío ${group.desafio.id}`,
         numIndicadores: group.indicators.length,
         metaPlaneada: sumPlanned,
@@ -434,7 +446,11 @@ function Consolidados({ data, userInfo }) {
       };
     });
 
-    return result.sort((a, b) => Number(a.id_desafio) - Number(b.id_desafio));
+    return result.sort((a, b) => {
+      if (a.id_desafio === "sin_eje") return 1;
+      if (b.id_desafio === "sin_eje") return -1;
+      return Number(a.id_desafio) - Number(b.id_desafio);
+    });
   }, [
     filteredIndicators,
     desafioById,
@@ -457,7 +473,8 @@ function Consolidados({ data, userInfo }) {
 
     filteredIndicators.forEach((indicator) => {
       const idDesafio = String(indicator.id_desafio || "");
-      const eje = String(indicator.eje ?? "").trim();
+      const rawEje = String(indicator.eje ?? "").trim();
+      const eje = rawEje || "sin_eje";
       const dimensionId = groupingMode === "eje" ? eje : idDesafio;
       const idDependencia = String(indicator.id_dependencia || "");
 
@@ -532,7 +549,9 @@ function Consolidados({ data, userInfo }) {
         id_dependencia: group.id_dependencia,
         desafioNombre:
           groupingMode === "eje"
-            ? ejeById.get(String(group.id_desafio))?.nombre || `Eje ${group.id_desafio}`
+            ? group.id_desafio === "sin_eje"
+              ? "Sin eje"
+              : ejeById.get(String(group.id_desafio))?.nombre || `Eje ${group.id_desafio}`
             : `Desafío ${group.id_desafio}`,
         escuelaNombre:
           group.dependencia.nombre || `Escuela ${group.id_dependencia}`,
@@ -563,9 +582,11 @@ function Consolidados({ data, userInfo }) {
       row.schools[item.id_dependencia] = item;
     });
 
-    return [...rowsMap.values()].sort(
-      (a, b) => Number(a.id_desafio) - Number(b.id_desafio),
-    );
+    return [...rowsMap.values()].sort((a, b) => {
+      if (a.id_desafio === "sin_eje") return 1;
+      if (b.id_desafio === "sin_eje") return -1;
+      return Number(a.id_desafio) - Number(b.id_desafio);
+    });
   }, [
     filteredIndicators,
     desafioById,
@@ -796,9 +817,10 @@ function Consolidados({ data, userInfo }) {
       const planned = meta ? meta[`meta_${selectedYear}`] : null;
       const executed = avance ? avance[`avance_${selectedYear}`] : null;
       if (!hasYearValue(planned) && !hasYearValue(executed)) return;
+      const rawEje = String(indicator.eje ?? "").trim();
       const dimensionId =
         groupingMode === "eje"
-          ? String(indicator.eje ?? "").trim()
+          ? (rawEje || "sin_eje")
           : String(indicator.id_desafio || "");
       const key = `${dimensionId}_${normalize(indicator.nombre)}`;
       const existing = grouped.get(key);
@@ -823,7 +845,9 @@ function Consolidados({ data, userInfo }) {
         ...indicator,
         desafioNombre:
           groupingMode === "eje"
-            ? ejeById.get(String(indicator.eje ?? "").trim())?.nombre || `Eje ${String(indicator.eje ?? "").trim()}`
+            ? rawEje
+              ? ejeById.get(rawEje)?.nombre || `Eje ${rawEje}`
+              : "Sin eje"
             : desafioById.get(String(indicator.id_desafio))?.titulo,
         dependencyCounts: {
           [toText(
@@ -937,7 +961,11 @@ function Consolidados({ data, userInfo }) {
       indicatorRows.reduce(
         (counts, row) => {
           const value = parseSheetNumber(row.executionPercent);
-          if (value === null || row.executionPercent === "Sin registro") {
+          if (
+            value === null ||
+            row.executionPercent === "Sin registro" ||
+            value < 1
+          ) {
             counts.sinRegistro += 1;
           } else if (value > 90) {
             counts.superior += 1;
@@ -1251,7 +1279,7 @@ function Consolidados({ data, userInfo }) {
         ["Mayores de 90%", indicatorColorCounts.superior],
         ["Entre 50% y 90%", indicatorColorCounts.alto],
         ["Entre 30% y 49%", indicatorColorCounts.medio],
-        ["Entre 0% y 29%", indicatorColorCounts.bajo],
+        ["Entre 1% y 29%", indicatorColorCounts.bajo],
         ["Sin registro", indicatorColorCounts.sinRegistro],
       ],
       {
@@ -1333,11 +1361,11 @@ function Consolidados({ data, userInfo }) {
     try {
       const getHexColor = (value) => {
         const number = parseSheetNumber(value);
-        if (number === null || value === "Sin registro") return "#9e9e9e"; // gris
+        if (number === null || value === "Sin registro" || number < 1) return "#9e9e9e"; // gris
         if (number > 90) return "#90ee90"; // verde claro
         if (number >= 50) return "#add8e6"; // azul claro
         if (number >= 30) return "#ffff00"; // amarillo
-        if (number >= 0) return "#fa8072"; // salmon
+        if (number >= 1) return "#fa8072"; // salmon
         return "transparent";
       };
 
@@ -1626,7 +1654,9 @@ function Consolidados({ data, userInfo }) {
               <MenuItem value="">Todos</MenuItem>
               {ejes.map((eje) => (
                 <MenuItem key={eje} value={eje}>
-                  {ejeById.get(String(eje))?.nombre || `Eje ${eje}`}
+                  {eje === "sin_eje"
+                    ? "Sin eje"
+                    : ejeById.get(String(eje))?.nombre || `Eje ${eje}`}
                 </MenuItem>
               ))}
             </Select>
@@ -1877,7 +1907,7 @@ function Consolidados({ data, userInfo }) {
                           },
                           {
                             key: "bajo",
-                            label: "Entre 0% y 29%",
+                            label: "Entre 1% y 29%",
                             count: indicatorColorCounts.bajo,
                             color: "salmon",
                           },
@@ -2075,7 +2105,7 @@ function Consolidados({ data, userInfo }) {
                   { key: "superior", label: "Mayores de 90%" },
                   { key: "alto", label: "Entre 50% y 90%" },
                   { key: "medio", label: "Entre 30% y 49%" },
-                  { key: "bajo", label: "Entre 0% y 29%" },
+                  { key: "bajo", label: "Entre 1% y 29%" },
                   { key: "sinRegistro", label: "Sin registro" },
                 ].find((r) => r.key === selectedColorRange)?.label}{" "}
                 ({filteredByColorRows.length})

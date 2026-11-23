@@ -5,6 +5,7 @@ import {
   AccordionSummary,
   Box,
   Button,
+  Checkbox,
   Dialog,
   DialogContent,
   DialogTitle,
@@ -1469,12 +1470,35 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
                 sx={{
                   display: "flex",
                   justifyContent: "flex-end",
+                  alignItems: "center",
                   gap: 1,
                   mt: 2,
                   mb: 2,
                   flexWrap: "wrap",
                 }}
               >
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={
+                        indicator.aplica_estadisticas !== false &&
+                        String(indicator.aplica_estadisticas ?? "")
+                          .trim()
+                          .toLowerCase() !== "false"
+                      }
+                      onChange={(e) => {
+                        const nextVal = e.target.checked;
+                        void updateIndicator(indicator.id, {
+                          aplica_estadisticas: nextVal ? "TRUE" : "FALSE",
+                        });
+                      }}
+                      disabled={busyId === String(indicator.id)}
+                      size="small"
+                    />
+                  }
+                  label="Aplica estadísticas"
+                  sx={{ mr: 1, userSelect: "none" }}
+                />
                 <Button
                   variant="outlined"
                   onClick={() => setDetailsState({ open: true, indicator })}
