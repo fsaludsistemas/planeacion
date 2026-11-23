@@ -185,7 +185,13 @@ const Seguimientos = ({ data, userInfo }) => {
   );
   const users = useMemo(() => sortById(getSheet(data, "USUARIOS")), [data]);
   const indicators = useMemo(
-    () => sortById(getSheet(data, "INDICADORES_PRODUCTO")),
+    () =>
+      sortById(getSheet(data, "INDICADORES_PRODUCTO")).filter((item) => {
+        const aplica = item?.aplica_estadisticas;
+        if (aplica === false) return false;
+        if (String(aplica ?? "").trim().toLowerCase() === "false") return false;
+        return true;
+      }),
     [data],
   );
   const metas = useMemo(() => sortById(getSheet(data, "METAS")), [data]);
