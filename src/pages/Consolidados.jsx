@@ -68,6 +68,15 @@ const getSheet = (data, ...keys) => {
   return [];
 };
 
+const appliesToStatistics = (indicator) => {
+  const value =
+    indicator?.aplica_estadistica ?? indicator?.aplica_estadisticas;
+  if (value === false) return false;
+  return !["false", "0", "no", "off"].includes(
+    String(value ?? "").trim().toLowerCase(),
+  );
+};
+
 const buildYearKeys = (metas, avances) => {
   const keys = new Set();
   [...metas, ...avances].forEach((item) => {
@@ -190,7 +199,10 @@ function Consolidados({ data, userInfo }) {
 
   const desafios = useMemo(() => sortById(getSheet(data, "DESAFIOS")), [data]);
   const indicators = useMemo(
-    () => sortById(getSheet(data, "INDICADORES_PRODUCTO")),
+    () =>
+      sortById(getSheet(data, "INDICADORES_PRODUCTO")).filter(
+        appliesToStatistics,
+      ),
     [data],
   );
   const ejesCatalog = useMemo(() => sortById(getSheet(data, "EJES")), [data]);

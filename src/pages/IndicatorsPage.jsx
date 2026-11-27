@@ -65,6 +65,15 @@ const getSheet = (data, ...keys) => {
   return [];
 };
 
+const appliesToStatistics = (indicator) => {
+  const value =
+    indicator?.aplica_estadistica ?? indicator?.aplica_estadisticas;
+  if (value === false) return false;
+  return !["false", "0", "no", "off"].includes(
+    String(value ?? "").trim().toLowerCase(),
+  );
+};
+
 const sortById = (items) =>
   [...items].sort((a, b) => Number(a?.id ?? 0) - Number(b?.id ?? 0));
 
@@ -1481,15 +1490,12 @@ const IndicatorsPage = ({ data, userInfo, onRefreshData }) => {
                   control={
                     <Checkbox
                       checked={
-                        indicator.aplica_estadisticas !== false &&
-                        String(indicator.aplica_estadisticas ?? "")
-                          .trim()
-                          .toLowerCase() !== "false"
+                        appliesToStatistics(indicator)
                       }
                       onChange={(e) => {
                         const nextVal = e.target.checked;
                         void updateIndicator(indicator.id, {
-                          aplica_estadisticas: nextVal ? "TRUE" : "FALSE",
+                          aplica_estadistica: nextVal ? "TRUE" : "FALSE",
                         });
                       }}
                       disabled={busyId === String(indicator.id)}
