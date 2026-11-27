@@ -82,6 +82,15 @@ const getSheet = (data, ...keys) => {
   return [];
 };
 
+const appliesToStatistics = (indicator) => {
+  const value =
+    indicator?.aplica_estadistica ?? indicator?.aplica_estadisticas;
+  if (value === false) return false;
+  return !["false", "0", "no", "off"].includes(
+    String(value ?? "").trim().toLowerCase(),
+  );
+};
+
 const buildYearKeys = (metas, avances) => {
   const keys = new Set();
   [...metas, ...avances].forEach((item) => {
@@ -186,12 +195,9 @@ const Seguimientos = ({ data, userInfo }) => {
   const users = useMemo(() => sortById(getSheet(data, "USUARIOS")), [data]);
   const indicators = useMemo(
     () =>
-      sortById(getSheet(data, "INDICADORES_PRODUCTO")).filter((item) => {
-        const aplica = item?.aplica_estadisticas;
-        if (aplica === false) return false;
-        if (String(aplica ?? "").trim().toLowerCase() === "false") return false;
-        return true;
-      }),
+      sortById(getSheet(data, "INDICADORES_PRODUCTO")).filter(
+        appliesToStatistics,
+      ),
     [data],
   );
   const metas = useMemo(() => sortById(getSheet(data, "METAS")), [data]);
